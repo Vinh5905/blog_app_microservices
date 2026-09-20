@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     name: Verify ${{ matrix.module }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -60,7 +60,7 @@ jobs:
     name: Backend test gate
     if: always()
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Require every module to pass
         env:

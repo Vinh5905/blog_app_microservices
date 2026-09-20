@@ -4,9 +4,9 @@ This is the concise handoff log for implementation work. The architecture source
 
 ## 2026-09-20 — Updated and automated GitHub Actions pins
 
-- Changed: upgraded backend CI to immutable `actions/checkout` v7.0.1, `actions/setup-java` v6.0.1, and `actions/upload-artifact` v7.0.1 SHAs; disabled persisted checkout credentials; added weekly Dependabot updates for GitHub Actions.
-- Verified: both GitHub YAML files parsed successfully; every workflow `uses:` reference passed the 40-character SHA check; `./scripts/verify.sh` passed all four Maven builds and the frontend production build when run with the local-network/Docker permissions required by WireMock and Testcontainers; `git diff --check` passed.
-- Pending: merge/push the workflow and confirm its first GitHub-hosted `Backend CI` run; none for local implementation.
+- Changed: upgraded backend CI to immutable `actions/checkout` v7.0.1, `actions/setup-java` v6.0.1, and `actions/upload-artifact` v7.0.1 SHAs; pinned both jobs to Ubuntu 24.04; disabled persisted checkout credentials; added weekly Dependabot updates for GitHub Actions.
+- Verified: both GitHub YAML files parsed successfully; every workflow `uses:` reference passed the 40-character SHA check; `./scripts/verify.sh` passed all four Maven builds and the frontend production build when run with the local-network/Docker permissions required by WireMock and Testcontainers; GitHub-hosted `Backend CI` run 35504921337 passed all four module jobs, report uploads, and the aggregate test gate.
+- Pending: none.
 
 ## 2026-09-20 — Expanded backend testing handoff
 

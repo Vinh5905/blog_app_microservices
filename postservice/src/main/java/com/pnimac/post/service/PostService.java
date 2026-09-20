@@ -2,6 +2,8 @@ package com.pnimac.post.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Date;
+import java.time.Clock;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -16,8 +18,13 @@ import jakarta.transaction.Transactional;
 @Service
 public class PostService {
 	
-	@Autowired
-    private PostRepository postRepository;
+	private final PostRepository postRepository;
+	private final Clock clock;
+
+	public PostService(PostRepository postRepository, Clock clock) {
+		this.postRepository = postRepository;
+		this.clock = clock;
+	}
 
 	public List<Post> getAllPosts() {
         return postRepository.findAllByOrderByCreatedAtDesc();
@@ -25,6 +32,7 @@ public class PostService {
 
 	@Transactional
     public Post addPost(Post post) {
+        post.setCreatedAt(Date.from(clock.instant()));
         return postRepository.saveAndFlush(post);
     }
 

@@ -2,6 +2,30 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-20 — Updated and automated GitHub Actions pins
+
+- Changed: upgraded backend CI to immutable `actions/checkout` v7.0.1, `actions/setup-java` v6.0.1, and `actions/upload-artifact` v7.0.1 SHAs; disabled persisted checkout credentials; added weekly Dependabot updates for GitHub Actions.
+- Verified: both GitHub YAML files parsed successfully; every workflow `uses:` reference passed the 40-character SHA check; `./scripts/verify.sh` passed all four Maven builds and the frontend production build when run with the local-network/Docker permissions required by WireMock and Testcontainers; `git diff --check` passed.
+- Pending: merge/push the workflow and confirm its first GitHub-hosted `Backend CI` run; none for local implementation.
+
+## 2026-09-20 — Expanded backend testing handoff
+
+- Changed: rewrote `docs/BACKEND-TESTING-PLAN.md` as a detailed phase record covering the original baseline, decisions, Maven lifecycle, API/JWT contracts, per-module test matrix, implementation mapping, CI behavior, acceptance evidence, explicit gaps, and ordered follow-up work.
+- Verified: cross-checked every listed test and status against the current test sources/POMs; `git diff --check` passed.
+- Pending: implement the security/HTTP and gateway-resilience cases marked `Pending` in sections 6 and 12 of the plan.
+
+## 2026-09-20 — Implemented backend production test phase
+
+- Changed: added the backend testing plan; standardized validation/status/error responses; hardened JWT and ownership handling; added the unique-email Flyway migration; added JUnit/Mockito unit tests, MySQL 8.4 Testcontainers HTTP/security tests, Flyway upgrade tests, WireMock gateway route tests, Surefire/Failsafe/JaCoCo gates, and the pinned GitHub Actions backend matrix gate; extended smoke coverage for malformed JWT and cross-user deletion.
+- Verified: `JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home/bin:$PATH ./scripts/verify.sh` passed 31 Java tests across four independent Maven builds plus the frontend production build; auth/post/comment JaCoCo line coverage was 92.26%/93.28%/92.54% and branch coverage was 70.00%/72.22%/72.22%; `docker compose up --build -d` completed with all six containers healthy; `./scripts/smoke-test.sh` passed same-origin auth/post/comment flows, malformed JWT 401, cross-user 403, and owner cleanup.
+- Pending: frontend Jest/component and Playwright E2E tests; frontend dependency audit/CRA migration; broader security scanning and trusted image release stages.
+
+## 2026-09-20 — Added implementation roadmap
+
+- Changed: added `docs/NEXT-STEPS.md` with the reviewed project status, milestone gaps, ordered implementation phases, acceptance evidence, and immediate checklist.
+- Verified: documentation structure reviewed and `git diff --check` passed.
+- Pending: begin Phase 1 by adding backend security/ownership tests, MySQL integration tests, and frontend component tests.
+
 ## 2026-09-18 — Runtime baseline aligned with source audit
 
 - Changed: replaced Eureka/Config Server runtime dependencies with explicit service URLs; corrected three gateway routes and same-origin frontend API calls; standardized backend container ports; externalized DB/JWT settings; added Actuator/Prometheus endpoints and graceful shutdown.

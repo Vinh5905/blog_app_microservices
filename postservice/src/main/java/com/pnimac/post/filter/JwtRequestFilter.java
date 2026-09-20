@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.pnimac.post.util.JwtUtil;
+import com.pnimac.post.error.ProblemAuthenticationEntryPoint;
 
 import io.jsonwebtoken.Claims;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,6 +27,12 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
+
+    public JwtRequestFilter(ProblemAuthenticationEntryPoint authenticationEntryPoint) {
+        this.authenticationEntryPoint = authenticationEntryPoint;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -41,33 +48,36 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                rejectInvalidJwt(response);
+                authenticationEntryPoint.invalidToken(request, response);
                 return;
             }
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            if (jwtUtil.validateToken(jwt)) {
-                Claims claims = jwtUtil.extractAllClaims(jwt);
-                List<SimpleGrantedAuthority> authorities = ((List<?>) claims.get("roles")).stream()
-                        .map(role -> new SimpleGrantedAuthority((String) role))
-                        .collect(Collectors.toList());
+            try {
+                if (jwtUtil.validateToken(jwt)) {
+                    Claims claims = jwtUtil.extractAllClaims(jwt);
+                    Object roles = claims.get("roles");
+                    if (!(roles instanceof List<?> roleList)) {
+                        throw new IllegalArgumentException("Missing roles claim");
+                    }
+                    List<SimpleGrantedAuthority> authorities = roleList.stream()
+                            .map(role -> new SimpleGrantedAuthority((String) role))
+                            .collect(Collectors.toList());
 
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        username, null, authorities);
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            } else {
-                rejectInvalidJwt(response);
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            username, null, authorities);
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    throw new IllegalArgumentException("Invalid token");
+                }
+            } catch (Exception e) {
+                authenticationEntryPoint.invalidToken(request, response);
                 return;
             }
         }
         chain.doFilter(request, response);
     }
 
-    private void rejectInvalidJwt(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"error\":\"Invalid JWT token\"}");
-    }
 }

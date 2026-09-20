@@ -1,0 +1,68 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Verify ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - userauthservice
+          - postservice
+          - commentservice
+          - api-gateway-server
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin JDK 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: ${{ matrix.module }}/pom.xml
+
+      - name: Verify module
+        working-directory: ${{ matrix.module }}
+        run: ./mvnw -B -ntp clean verify
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-reports-${{ matrix.module }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ matrix.module }}/target/surefire-reports/
+            ${{ matrix.module }}/target/failsafe-reports/
+            ${{ matrix.module }}/target/site/jacoco/
+
+  backend-test-gate:
+    name: Backend test gate
+    if: always()
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every module to pass
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: test "$VERIFY_RESULT" = success

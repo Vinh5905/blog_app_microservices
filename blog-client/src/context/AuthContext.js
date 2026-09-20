@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Login failed:', error);
-      throw new Error(error.response?.data?.message || 'Login failed');
+      throw new Error(error.response?.data?.detail || error.response?.data?.message || 'Login failed');
     }
   };
 
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Signup failed:', error);
-      throw new Error(error.response?.data?.message || 'Signup failed');
+      throw new Error(error.response?.data?.detail || error.response?.data?.message || 'Signup failed');
     }
   };
 

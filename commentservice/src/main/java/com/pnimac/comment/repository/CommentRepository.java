@@ -13,6 +13,6 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	
 	List<Comment> findAllByOrderByCreatedAtAsc();
 	
-	List<Comment> findByPostId(Long postId);
+	List<Comment> findByPostIdOrderByCreatedAtDesc(Long postId);
 		
 }

@@ -20,6 +20,9 @@ import com.pnimac.comment.model.Comment;
 import com.pnimac.comment.request.CommentRequest;
 import com.pnimac.comment.service.CommentService;
 
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+
 @RestController
 @RequestMapping("/api/comment")
 public class CommentController {
@@ -41,13 +44,13 @@ public class CommentController {
     }
     
     @PostMapping("/addComment")
-    public ResponseEntity<CommentDTO> addComment(@RequestBody CommentRequest commentRequest, Authentication authentication) {
+    public ResponseEntity<CommentDTO> addComment(@Valid @RequestBody CommentRequest commentRequest, Authentication authentication) {
         Comment newComment = new Comment();
         newComment.setContent(commentRequest.getContent());
         newComment.setPostId(commentRequest.getPostId());
         newComment.setUsername(authentication.getName());
         CommentDTO commentDTO = CommentDTO.fromEntity(commentService.save(newComment));
-        return ResponseEntity.ok(commentDTO);
+        return ResponseEntity.status(HttpStatus.CREATED).body(commentDTO);
     }
     
     @DeleteMapping("/deleteComment/{commentId}")

@@ -19,6 +19,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.pnimac.auth.filter.JwtAuthenticationFilter;
+import com.pnimac.auth.error.ProblemAccessDeniedHandler;
+import com.pnimac.auth.error.ProblemAuthenticationEntryPoint;
 import com.pnimac.auth.model.service.CustomUserDetailsService;
 
 @Configuration
@@ -30,10 +32,15 @@ public class SecurityConfig {
 	
 	@Autowired
 	private final CustomUserDetailsService userDetailsService;
+	private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
+	private final ProblemAccessDeniedHandler accessDeniedHandler;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, CustomUserDetailsService userDetailsService) {
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, CustomUserDetailsService userDetailsService,
+			ProblemAuthenticationEntryPoint authenticationEntryPoint, ProblemAccessDeniedHandler accessDeniedHandler) {
 		this.jwtAuthFilter = jwtAuthFilter;
 		this.userDetailsService = userDetailsService;
+		this.authenticationEntryPoint = authenticationEntryPoint;
+		this.accessDeniedHandler = accessDeniedHandler;
 	}
 
 	@Bean
@@ -68,14 +75,16 @@ public class SecurityConfig {
 								.and().userDetailsService(userDetailsService)
 								.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class));**/
 		http
-        .cors().and()
-        .csrf().disable()
-        .authorizeRequests(authz -> authz
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        .csrf(csrf -> csrf.disable())
+        .authorizeHttpRequests(authz -> authz
             .requestMatchers("/api/auth/login", "/api/auth/signup", "/actuator/health/**").permitAll()
             .anyRequest().authenticated()
         )
-        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-        .and()
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .exceptionHandling(exceptions -> exceptions
+            .authenticationEntryPoint(authenticationEntryPoint)
+            .accessDeniedHandler(accessDeniedHandler))
         .userDetailsService(userDetailsService)
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

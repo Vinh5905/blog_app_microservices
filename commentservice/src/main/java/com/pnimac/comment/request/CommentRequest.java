@@ -1,8 +1,18 @@
 package com.pnimac.comment.request;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
 public class CommentRequest {
 
+	@NotBlank
+	@Size(max = 10000)
 	private String content;
+
+	@NotNull
+	@Positive
 	private Long postId;
 	private String username;
 	

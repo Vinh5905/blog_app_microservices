@@ -10,6 +10,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.pnimac.auth.model.service.CustomUserDetailsService;
 import com.pnimac.auth.util.JwtUtil;
+import com.pnimac.auth.error.ProblemAuthenticationEntryPoint;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -30,9 +31,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	@Autowired
     private final CustomUserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
+    private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
+
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService,
+            ProblemAuthenticationEntryPoint authenticationEntryPoint) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.authenticationEntryPoint = authenticationEntryPoint;
     }
 
     @Override
@@ -48,31 +53,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                rejectInvalidJwt(response);
+                authenticationEntryPoint.invalidToken(request, response);
                 return;
             }
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-            if (jwtUtil.validateToken(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                usernamePasswordAuthenticationToken
-                        .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
-            } else {
-                rejectInvalidJwt(response);
+            try {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                if (jwtUtil.validateToken(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    usernamePasswordAuthenticationToken
+                            .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+                } else {
+                    authenticationEntryPoint.invalidToken(request, response);
+                    return;
+                }
+            } catch (Exception e) {
+                authenticationEntryPoint.invalidToken(request, response);
                 return;
             }
         }
         filterChain.doFilter(request, response);
     }
 
-    private void rejectInvalidJwt(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"error\":\"Invalid JWT token\"}");
-    }
 }

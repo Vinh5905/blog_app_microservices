@@ -1,6 +1,7 @@
 package com.pnimac.comment.service;
 
 import java.util.Date;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,12 +17,17 @@ import jakarta.transaction.Transactional;
 @Service
 public class CommentService {
 
-	@Autowired 
-	private CommentRepository commentRepository;
+	private final CommentRepository commentRepository;
+	private final Clock clock;
+
+	public CommentService(CommentRepository commentRepository, Clock clock) {
+		this.commentRepository = commentRepository;
+		this.clock = clock;
+	}
 	
 	@Transactional
 	public Comment save(Comment comment) {
-		comment.setCreatedAt(new Date());
+		comment.setCreatedAt(Date.from(clock.instant()));
 		return commentRepository.saveAndFlush(comment);
 	}
 	
@@ -30,7 +36,7 @@ public class CommentService {
 	}
 	
 	public List<Comment> findByPostidByOrderByCreatedAtDesc(Long postId){
-		return commentRepository.findByPostId(postId);
+		return commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
 	}
 	
 	@Transactional

@@ -17,6 +17,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.pnimac.post.filter.JwtRequestFilter;
+import com.pnimac.post.error.ProblemAccessDeniedHandler;
+import com.pnimac.post.error.ProblemAuthenticationEntryPoint;
 
 @Configuration
 @EnableWebSecurity
@@ -25,6 +27,15 @@ public class SecurityConfig {
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
 
+    private final ProblemAuthenticationEntryPoint authenticationEntryPoint;
+    private final ProblemAccessDeniedHandler accessDeniedHandler;
+
+    public SecurityConfig(ProblemAuthenticationEntryPoint authenticationEntryPoint,
+            ProblemAccessDeniedHandler accessDeniedHandler) {
+        this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
+    }
+
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
@@ -32,14 +43,17 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-    	http
-        .cors().and()
-        .csrf().disable()
-        .authorizeRequests(authz -> authz
+		http
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        .csrf(csrf -> csrf.disable())
+        .authorizeHttpRequests(authz -> authz
             .requestMatchers("/actuator/health/**").permitAll()
             .anyRequest().authenticated()
         )
-        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+		.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+		.exceptionHandling(exceptions -> exceptions
+			.authenticationEntryPoint(authenticationEntryPoint)
+			.accessDeniedHandler(accessDeniedHandler));
 		
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 

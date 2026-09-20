@@ -14,11 +14,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pnimac.post.dto.PostDTO;
 import com.pnimac.post.model.Post;
 import com.pnimac.post.request.PostRequest;
 import com.pnimac.post.service.PostService;
+
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/post")
@@ -27,12 +29,8 @@ public class PostController {
 	@Autowired
     private PostService postService;
 	
-	@Autowired
-	private final ObjectMapper objectMapper;
-	
-	public PostController(PostService postService, ObjectMapper objectMapper) {
+	public PostController(PostService postService) {
 		this.postService = postService;
-		this.objectMapper = objectMapper;
 	}
 	
     @GetMapping("/getAllPosts")
@@ -45,14 +43,13 @@ public class PostController {
     }
 
     @PostMapping("/createPost")
-    public ResponseEntity<?> createPost(@RequestBody String rawBody, Authentication authentication) throws Exception {
-    	PostRequest postRequest = objectMapper.readValue(rawBody, PostRequest.class);
+    public ResponseEntity<PostDTO> createPost(@Valid @RequestBody PostRequest postRequest, Authentication authentication) {
     	Post post = new Post();
     	post.setTitle(postRequest.getTitle());
     	post.setContent(postRequest.getBody());
 	post.setUsername(authentication.getName());
         PostDTO createdPost = PostDTO.fromEntity(postService.addPost(post));
-        return ResponseEntity.ok(createdPost);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdPost);
     }
 
     @DeleteMapping("deletePost/{postId}")

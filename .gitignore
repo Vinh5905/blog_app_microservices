@@ -1,0 +1,13 @@
+*.DS_Store
+*.project
+*.classpath
+*.Help.md
+
+**/.metadata/
+**/.settings/
+**/target/
+**/node_modules/
+blog-client/build/
+.env
+.kilo/
+.cache/

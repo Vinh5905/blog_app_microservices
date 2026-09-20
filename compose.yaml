@@ -1,0 +1,103 @@
+name: blogapp
+
+x-java-service: &java-service
+  restart: unless-stopped
+  environment: &java-environment
+    SERVER_PORT: 8080
+    MANAGEMENT_PORT: 9090
+    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+    JWT_EXPIRATION_SECONDS: 3600
+  depends_on:
+    mysql:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9090'"]
+    interval: 10s
+    timeout: 3s
+    retries: 12
+    start_period: 30s
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD:?USER_DB_PASSWORD must be set}
+      POST_DB_PASSWORD: ${POST_DB_PASSWORD:?POST_DB_PASSWORD must be set}
+      COMMENT_DB_PASSWORD: ${COMMENT_DB_PASSWORD:?COMMENT_DB_PASSWORD must be set}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sh:/docker-entrypoint-initdb.d/10-blogapp.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  userauthservice:
+    <<: *java-service
+    build: ./userauthservice
+    environment:
+      <<: *java-environment
+      DB_URL: jdbc:mysql://mysql:3306/userdb?useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: user_service
+      DB_PASSWORD: ${USER_DB_PASSWORD:?USER_DB_PASSWORD must be set}
+
+  postservice:
+    <<: *java-service
+    build: ./postservice
+    environment:
+      <<: *java-environment
+      DB_URL: jdbc:mysql://mysql:3306/postdb?useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: post_service
+      DB_PASSWORD: ${POST_DB_PASSWORD:?POST_DB_PASSWORD must be set}
+
+  commentservice:
+    <<: *java-service
+    build: ./commentservice
+    environment:
+      <<: *java-environment
+      DB_URL: jdbc:mysql://mysql:3306/commentdb?useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: comment_service
+      DB_PASSWORD: ${COMMENT_DB_PASSWORD:?COMMENT_DB_PASSWORD must be set}
+
+  api-gateway-server:
+    build: ./api-gateway-server
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_URL: http://userauthservice:8080
+      POST_SERVICE_URL: http://postservice:8080
+      COMMENT_SERVICE_URL: http://commentservice:8080
+      MANAGEMENT_PORT: 9090
+    depends_on:
+      userauthservice:
+        condition: service_healthy
+      postservice:
+        condition: service_healthy
+      commentservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9090'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  blog-client:
+    build: ./blog-client
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    depends_on:
+      api-gateway-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  mysql-data:

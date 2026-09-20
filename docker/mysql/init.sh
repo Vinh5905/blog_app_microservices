@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+mysql --protocol=socket -uroot -p"${MYSQL_ROOT_PASSWORD}" <<SQL
+CREATE DATABASE IF NOT EXISTS userdb;
+CREATE DATABASE IF NOT EXISTS postdb;
+CREATE DATABASE IF NOT EXISTS commentdb;
+
+CREATE USER IF NOT EXISTS 'user_service'@'%' IDENTIFIED BY '${USER_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'post_service'@'%' IDENTIFIED BY '${POST_DB_PASSWORD}';
+CREATE USER IF NOT EXISTS 'comment_service'@'%' IDENTIFIED BY '${COMMENT_DB_PASSWORD}';
+ALTER USER 'user_service'@'%' IDENTIFIED BY '${USER_DB_PASSWORD}';
+ALTER USER 'post_service'@'%' IDENTIFIED BY '${POST_DB_PASSWORD}';
+ALTER USER 'comment_service'@'%' IDENTIFIED BY '${COMMENT_DB_PASSWORD}';
+
+GRANT ALL PRIVILEGES ON userdb.* TO 'user_service'@'%';
+GRANT ALL PRIVILEGES ON postdb.* TO 'post_service'@'%';
+GRANT ALL PRIVILEGES ON commentdb.* TO 'comment_service'@'%';
+FLUSH PRIVILEGES;
+SQL

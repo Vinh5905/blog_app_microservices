@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-f-config-reader
+  labels:
+    app: lab-f-config-reader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab-f-config-reader
+  template:
+    metadata:
+      labels:
+        app: lab-f-config-reader
+    spec:
+      containers:
+        - name: reader
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              echo "APP_ENV=${APP_ENV}"
+              if [ -n "${TEST_PASSWORD}" ]; then
+                echo "TEST_PASSWORD is present"
+              else
+                echo "TEST_PASSWORD is missing"
+                exit 1
+              fi
+              sleep 3600
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: lab-f-config
+                  key: APP_ENV
+            - name: TEST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lab-f-secret
+                  key: TEST_PASSWORD

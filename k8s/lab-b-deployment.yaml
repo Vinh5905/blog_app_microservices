@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-b-web
+  labels:
+    app: lab-b-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: lab-b-web
+  template:
+    metadata:
+      labels:
+        app: lab-b-web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.28
+          ports:
+            - containerPort: 80

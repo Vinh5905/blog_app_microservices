@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-g-writer
+  labels:
+    app: lab-g-writer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab-g-writer
+  template:
+    metadata:
+      labels:
+        app: lab-g-writer
+    spec:
+      containers:
+        - name: writer
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              echo "Pod $(hostname) đang sử dụng PVC"
+              sleep 3600
+          volumeMounts:
+            - name: persistent-data
+              mountPath: /data
+      volumes:
+        - name: persistent-data
+          persistentVolumeClaim:
+            claimName: lab-g-data

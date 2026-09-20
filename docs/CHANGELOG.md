@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-20 — Kubernetes lab command notes
+
+- Changed: added `docs/Kubernetes-Labs.md` with Lab A cluster checks, Lab B Deployment/self-healing commands, Lab C Service/ClusterIP/port-forward commands, Lab D scaling commands, Lab E rollout failure/rollback commands, Lab F ConfigMap/Secret commands, Lab G PVC/persistent-storage commands, cleanup steps, the correct manifest structures, and explanations for the two YAML indentation errors encountered during practice.
+- Verified: documentation-only change; the file records the local `kubectl` workflow but does not claim a cluster run that has not been reported.
+- Pending: confirm Lab C through Lab G commands on the active cluster, then continue with Lab H cloud capstone and the remaining Kubernetes work.
+
 ## 2026-09-18 — Runtime baseline aligned with source audit
 
 - Changed: replaced Eureka/Config Server runtime dependencies with explicit service URLs; corrected three gateway routes and same-origin frontend API calls; standardized backend container ports; externalized DB/JWT settings; added Actuator/Prometheus endpoints and graceful shutdown.

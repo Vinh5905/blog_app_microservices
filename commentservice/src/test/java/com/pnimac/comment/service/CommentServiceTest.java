@@ -32,6 +32,11 @@ class CommentServiceTest {
         service = new CommentService(repository, Clock.fixed(now, ZoneOffset.UTC));
     }
 
+    /**
+     * Verifies that the service assigns the injected clock time before flushing a new
+     * comment. This keeps creation timestamps deterministic and avoids null or
+     * machine-time-dependent values.
+     */
     @Test
     void addsTimestampBeforeSaving() {
         Comment comment = new Comment();
@@ -39,12 +44,21 @@ class CommentServiceTest {
         assertThat(service.save(comment).getCreatedAt().toInstant()).isEqualTo(now);
     }
 
+    /**
+     * Verifies that a lookup for one post is delegated to the repository method that
+     * filters by post ID and sorts newest first. This prevents comments from different
+     * posts being mixed or returned in an unexpected order.
+     */
     @Test
     void delegatesOrderedPostLookup() {
         service.findByPostidByOrderByCreatedAtDesc(7L);
         verify(repository).findByPostIdOrderByCreatedAtDesc(7L);
     }
 
+    /**
+     * Verifies that the authenticated owner may delete their own comment. This protects
+     * the expected success path of the ownership rule.
+     */
     @Test
     void ownerCanDelete() {
         when(repository.findById(1L)).thenReturn(Optional.of(ownedBy("alice")));
@@ -52,6 +66,10 @@ class CommentServiceTest {
         verify(repository).deleteById(1L);
     }
 
+    /**
+     * Verifies that a different authenticated user receives 403 and that no delete is
+     * sent to the repository. This prevents cross-user deletion and partial side effects.
+     */
     @Test
     void nonOwnerCannotDelete() {
         when(repository.findById(1L)).thenReturn(Optional.of(ownedBy("alice")));
@@ -60,6 +78,10 @@ class CommentServiceTest {
         verify(repository, never()).deleteById(1L);
     }
 
+    /**
+     * Verifies that deleting an unknown comment returns 404. This distinguishes a
+     * missing resource from an authorization failure or an unexpected server error.
+     */
     @Test
     void missingCommentReturnsNotFound() {
         when(repository.findById(99L)).thenReturn(Optional.empty());

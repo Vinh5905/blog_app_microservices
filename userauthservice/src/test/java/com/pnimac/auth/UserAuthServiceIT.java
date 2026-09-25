@@ -40,6 +40,12 @@ class UserAuthServiceIT {
         users.deleteAll();
     }
 
+    /**
+     * Verifies the complete signup-login-current-user HTTP flow against MySQL 8.4:
+     * signup returns 201 without exposing the password, BCrypt is persisted, login
+     * issues a token, and that token resolves the correct current user. This protects
+     * the primary authentication journey and response-data boundary.
+     */
     @Test
     void signupLoginAndReadCurrentUser() {
         ResponseEntity<Map> signup = rest.postForEntity("/api/auth/signup",
@@ -61,6 +67,11 @@ class UserAuthServiceIT {
         assertThat(current.getBody()).containsEntry("username", "alice").doesNotContainKey("password");
     }
 
+    /**
+     * Verifies production error contracts for two business failures: duplicate email
+     * returns 409/DUPLICATE_EMAIL and a wrong password returns 401/BAD_CREDENTIALS.
+     * This keeps frontend behavior stable and prevents expected failures becoming 500s.
+     */
     @Test
     void duplicateEmailAndBadCredentialsUseProductionStatusCodes() {
         Map<String, String> body = Map.of("username", "alice", "email", "alice@example.test",
@@ -78,6 +89,11 @@ class UserAuthServiceIT {
         assertThat(badLogin.getBody()).containsEntry("code", "BAD_CREDENTIALS");
     }
 
+    /**
+     * Verifies that invalid signup fields return 400/VALIDATION_FAILED and a malformed
+     * bearer token returns 401/INVALID_TOKEN. This protects both request validation and
+     * the HTTP security boundary from leaking malformed input into application logic.
+     */
     @Test
     void validatesPayloadAndRejectsInvalidJwt() {
         ResponseEntity<Map> invalid = rest.postForEntity("/api/auth/signup",

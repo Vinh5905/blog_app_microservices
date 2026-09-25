@@ -54,6 +54,11 @@ class GatewayRoutesIT {
         COMMENT.stop();
     }
 
+    /**
+     * Verifies that /api/auth traffic reaches only the auth upstream while preserving
+     * the complete path and query string. This protects the same-origin API contract
+     * from route overlap, StripPrefix, or accidental path rewriting.
+     */
     @Test
     void routesAuthPathWithoutRewritingIt() {
         AUTH.stubFor(get(urlPathEqualTo("/api/auth/user")).withQueryParam("source", equalTo("test"))
@@ -68,6 +73,11 @@ class GatewayRoutesIT {
         COMMENT.verify(0, getRequestedFor(urlPathEqualTo("/api/auth/user")));
     }
 
+    /**
+     * Verifies that /api/post traffic reaches the post upstream, not the auth upstream,
+     * and that the upstream response is returned unchanged. This protects the dedicated
+     * post route from the duplicate or overlapping route configuration found originally.
+     */
     @Test
     void routesPostPathToPostOnly() {
         POST.stubFor(get(urlPathEqualTo("/api/post/getAllPosts"))
@@ -77,6 +87,11 @@ class GatewayRoutesIT {
         AUTH.verify(0, getRequestedFor(urlPathEqualTo("/api/post/getAllPosts")));
     }
 
+    /**
+     * Verifies that /api/comment traffic reaches the comment upstream and that the
+     * upstream status and body are propagated unchanged. This prevents the gateway from
+     * masking backend errors or routing comment requests to another service.
+     */
     @Test
     void routesCommentPathAndPropagatesStatus() {
         COMMENT.stubFor(get(urlPathEqualTo("/api/comment/getComments/7"))
@@ -86,6 +101,10 @@ class GatewayRoutesIT {
         COMMENT.verify(getRequestedFor(urlPathEqualTo("/api/comment/getComments/7")));
     }
 
+    /**
+     * Verifies that a path outside the configured API routes returns 404. This protects
+     * the gateway from unintentionally exposing a catch-all route to backend services.
+     */
     @Test
     void unknownPathIsNotRouted() {
         client.get().uri("/not-an-api").exchange().expectStatus().isNotFound();

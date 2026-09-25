@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-25 — Designed SonarQube Cloud CI gate
+
+- Changed: added `docs/SONARQUBE-CLOUD-CI-DESIGN.md` for five monorepo projects, staged backend/frontend Quality Gates, coverage imports, CI checks, token boundaries, failure handling, and acceptance evidence.
+- Verified: cross-checked the design against the current architecture, backend workflow, Maven JaCoCo setup, and frontend test gap; documentation whitespace and `git diff --check` passed. No Sonar analysis or GitHub ruleset was run.
+- Pending: configure SonarQube Cloud projects, implement CI scans and frontend tests, enable required checks, and collect remote run evidence.
+
 ## 2026-09-20 — Updated and automated GitHub Actions pins
 
 - Changed: upgraded backend CI to immutable `actions/checkout` v7.0.1, `actions/setup-java` v6.0.1, and `actions/upload-artifact` v7.0.1 SHAs; pinned both jobs to Ubuntu 24.04; disabled persisted checkout credentials; added weekly Dependabot updates for GitHub Actions.

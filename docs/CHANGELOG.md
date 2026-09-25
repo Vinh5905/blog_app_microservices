@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-25 — Prepare Maven cache for Trivy on GitHub
+
+- Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution.
+- Verified: initial GitHub run `36095994446` passed all backend checks but Trivy source scanning failed on Maven Central HTTP 429; local `./mvnw -B -ntp dependency:go-offline -DskipTests` passed for all four modules with JDK 17.
+- Pending: verify the corrected workflow on GitHub; dependency remediation and release acceptance remain pending.
+
 ## 2026-09-25 — Added Trivy source and image baseline CI
 
 - Changed: added pinned Trivy source/config PR checks, a five-image post-merge audit and CycloneDX artifacts, a fail-closed exception policy with tests, explicit non-root frontend Docker user, LF checkout rules, and `docs/TRIVY-PRODUCTION-CI.md`.

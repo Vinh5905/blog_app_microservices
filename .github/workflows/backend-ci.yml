@@ -16,6 +16,7 @@ concurrency:
 jobs:
   trivy-source:
     name: Trivy source gate
+    needs: backend-test-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,6 +31,26 @@ jobs:
           version: v0.74.0
           cache: false
 
+      - name: Record scanner and source versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-source"
+          trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/trivy-source/source-sha.txt"
+
+      - name: Set up Temurin JDK 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: api-gateway-server/pom.xml
+
+      - name: Resolve Maven dependencies before Trivy scan
+        run: |
+          for module in api-gateway-server userauthservice postservice commentservice; do
+            (cd "$module" && ./mvnw -B -ntp dependency:go-offline -DskipTests)
+          done
+
       - name: Restore vulnerability database cache
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
@@ -42,20 +63,12 @@ jobs:
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: |
-          mkdir -p "$RUNNER_TEMP/trivy-source"
           trivy fs --scanners vuln --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
 
       - name: Scan Dockerfiles and infrastructure configuration
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: trivy config --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
-
-      - name: Record scanner and source versions
-        env:
-          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
-        run: |
-          trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/trivy-source/source-sha.txt"
 
       - name: Validate Compose syntax
         env:

@@ -15,6 +15,8 @@ Trivy v0.74.0 và `aquasecurity/setup-trivy` v0.3.1 được pin trong workflow 
 
 ## Chính sách gate và ngoại lệ
 
+Job source chờ `Backend test gate`, khôi phục Maven cache dùng chung key với job gateway, rồi chạy `./mvnw -B -ntp dependency:go-offline -DskipTests` cho cả bốn backend. Bước này chuẩn bị POM/dependency trong local Maven repository trước khi Trivy phân tích, tránh tải trực tiếp hàng loạt từ Maven Central (run đầu đã gặp HTTP 429). Lỗi resolve dependency vẫn làm job thất bại; không bỏ qua dependency chưa phân tích được.
+
 `scripts/trivy_policy.py` chỉ chặn lỗ hổng **HIGH/CRITICAL có bản vá** và lỗi cấu hình **HIGH/CRITICAL**. Finding thấp hơn hoặc chưa có bản vá vẫn ở báo cáo đầy đủ để triage. Job source chạy `--mode enforce`, nên thất bại nếu còn finding chưa được xử lý; **chưa thêm check này vào required ruleset**. Job image hiện chạy `--mode audit` để đo nợ image, in cảnh báo và không được dùng làm bằng chứng đủ điều kiện phát hành.
 
 Ngoại lệ ở `security/trivy/exceptions.json` mặc định rỗng. Chỉ thêm một entry khi có owner, GitHub issue, lý do cụ thể, ngày hết hạn trong 30 ngày và định danh chính xác: stage + module + finding ID + package (lỗ hổng) hoặc target (cấu hình). Policy bác ngoại lệ hết hạn, trùng hoặc không còn khớp. Không tạo ngoại lệ hàng loạt cho nợ hiện có. Ví dụ cấu trúc, **không phải ngoại lệ đã được chấp nhận**:

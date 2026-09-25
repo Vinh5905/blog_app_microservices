@@ -26,6 +26,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Test Trivy policy
+        run: python3 -m unittest discover -s scripts -p test_trivy_policy.py -v
+
       - name: Install pinned Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
@@ -70,6 +73,11 @@ jobs:
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: trivy config --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
+
+      - name: Record databases used by scans
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
 
       - name: Validate Compose syntax
         env:

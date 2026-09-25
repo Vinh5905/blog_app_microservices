@@ -2,6 +2,18 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-25 — Enabled required backend and Sonar checks
+
+- Changed: activated the `main` ruleset requiring a PR, `Sonar quality gate`, and `Backend test gate` from GitHub Actions.
+- Verified: PR #2 run 36094511394 passed four backend verifies, four Sonar scans, four SonarQube Cloud checks, and both aggregate gates; GitHub shows ruleset 23979594 Active for `main`.
+- Pending: create a review-ready integration PR after validation, confirm a baseline run on `main`, and run the manual frontend baseline.
+
+## 2026-09-25 — Added SonarQube Cloud CI configuration
+
+- Changed: mapped the five supplied Sonar project keys; added four backend scans after JaCoCo and a failing aggregate Sonar gate; added a manual frontend baseline scan and documented the required GitHub secret/variable.
+- Verified: both workflow YAML files parsed; all four project mappings and the aggregate gate were checked; `./scripts/verify.sh` passed four independent Maven builds, JaCoCo checks and the frontend production build with local network/Docker access; all four JaCoCo XML and bytecode inputs exist.
+- Pending: run real Sonar analyses on main and an internal PR, inspect scope/coverage, then enable required checks; frontend tests and LCOV remain pending.
+
 ## 2026-09-25 — Designed SonarQube Cloud CI gate
 
 - Changed: added `docs/SONARQUBE-CLOUD-CI-DESIGN.md` for five monorepo projects, staged backend/frontend Quality Gates, coverage imports, CI checks, token boundaries, failure handling, and acceptance evidence.

@@ -1,10 +1,26 @@
 # SonarQube Cloud trong CI của BlogApp
 
-**Trạng thái:** thiết kế để triển khai; chưa cấu hình SonarQube Cloud, chưa chạy analysis và chưa bật required check Sonar trên GitHub.
+**Trạng thái:** PR #2 là draft để kiểm chứng CI, đã chạy thành công bốn backend scan và Quality Gate trên GitHub; ruleset `main` đã bật hai required check tổng hợp. Chưa đưa workflow vào `main` và frontend vẫn ở giai đoạn baseline thủ công.
 
 **Ngày:** 2026-09-25.
 
 **Phạm vi:** repository nguồn hiện tại với năm module `blog-client`, `api-gateway-server`, `userauthservice`, `postservice`, `commentservice`. SonarQube Cloud kiểm tra mã nguồn trong CI; việc quét secret, dependency, image và IaC vẫn là các gate riêng của [kiến trúc tổng thể](Kien-truc-DevOps-BlogApp%20copy.md), mục 7.
+
+## Cấu hình triển khai trong repository
+
+- .github/workflows/backend-ci.yml chạy bốn Maven verify, lưu bytecode và JaCoCo XML theo module, rồi chạy bốn SonarScanner for Maven với các key bên dưới. Check Sonar quality gate chỉ pass khi cả bốn scan và Quality Gate đều pass.
+- .github/workflows/frontend-sonar-baseline.yml chỉ chạy thủ công từ main. Scanner đọc blog-client/sonar-project.properties và chưa nhập coverage vì frontend chưa có LCOV. Workflow này chưa là required check.
+- Trên GitHub repo, tạo Actions Secret SONAR_TOKEN bằng token Sonar có quyền Execute Analysis trên năm project. Tạo Actions Variable SONAR_ORGANIZATION bằng **organization key hiển thị trong Sonar UI**. Nếu project ở vùng US, tạo thêm variable SONAR_REGION=us; để trống ở vùng EU. Không đưa token vào variables hoặc committed files.
+
+| Module | Sonar project key |
+| --- | --- |
+| userauthservice | vinh5905_blog_app_microservices_userauthservice |
+| postservice | vinh5905_blog_app_microservices_postservice |
+| commentservice | vinh5905_blog_app_microservices_commentservice |
+| api-gateway-server | vinh5905_blog_app_microservices_api-gateway-server |
+| blog-client | vinh5905_blog_app_microservices_blog-client |
+
+Các key lấy từ ảnh cấu hình project do chủ repository cung cấp. [PR #2](https://github.com/Vinh5905/blog_app_microservices/pull/2) là draft để kiểm chứng CI; [GitHub Actions run 36094511394](https://github.com/Vinh5905/blog_app_microservices/actions/runs/36094511394) xác nhận bốn scan backend, bốn check SonarQube Cloud và hai job tổng hợp đều pass. [Ruleset cho `main`](https://github.com/Vinh5905/blog_app_microservices/settings/rules/23979594) đang Active, yêu cầu PR cùng `Sonar quality gate` và `Backend test gate` từ GitHub Actions. Khi có PR tích hợp được duyệt và merge, kiểm tra baseline trên `main` và chạy frontend baseline thủ công để xác nhận scope/coverage.
 
 ## 1. Quyết định và ranh giới
 

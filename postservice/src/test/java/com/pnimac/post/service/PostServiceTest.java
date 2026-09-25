@@ -32,6 +32,11 @@ class PostServiceTest {
         service = new PostService(repository, Clock.fixed(now, ZoneOffset.UTC));
     }
 
+    /**
+     * Verifies that the service assigns the injected clock time before flushing a new
+     * post. This keeps creation timestamps deterministic and ensures persistence is
+     * actually invoked.
+     */
     @Test
     void addsTimestampBeforeSaving() {
         Post post = new Post();
@@ -40,6 +45,10 @@ class PostServiceTest {
         verify(repository).saveAndFlush(post);
     }
 
+    /**
+     * Verifies that the authenticated owner may delete their own post. This protects
+     * the expected success path of the ownership rule.
+     */
     @Test
     void ownerCanDelete() {
         Post post = postOwnedBy("alice");
@@ -48,6 +57,10 @@ class PostServiceTest {
         verify(repository).deleteById(1L);
     }
 
+    /**
+     * Verifies that a different authenticated user receives 403 and that no delete is
+     * sent to the repository. This prevents cross-user deletion and partial side effects.
+     */
     @Test
     void nonOwnerCannotDelete() {
         when(repository.findById(1L)).thenReturn(Optional.of(postOwnedBy("alice")));
@@ -57,6 +70,10 @@ class PostServiceTest {
         verify(repository, never()).deleteById(1L);
     }
 
+    /**
+     * Verifies that deleting an unknown post returns 404. This distinguishes a missing
+     * resource from an authorization failure or an unexpected server error.
+     */
     @Test
     void missingPostReturnsNotFound() {
         when(repository.findById(99L)).thenReturn(Optional.empty());

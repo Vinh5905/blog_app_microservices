@@ -46,6 +46,11 @@ class PostServiceIT {
         posts.deleteAll();
     }
 
+    /**
+     * Verifies the complete ownership contract against MySQL 8.4: create uses the JWT
+     * subject instead of a client-supplied username, a different user receives
+     * 403/NOT_OWNER without data loss, and the real owner can delete with 204.
+     */
     @Test
     void createsWithAuthenticatedIdentityAndEnforcesOwnership() {
         ResponseEntity<Map> created = rest.exchange("/api/post/createPost", HttpMethod.POST,
@@ -66,6 +71,11 @@ class PostServiceIT {
         assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
+    /**
+     * Verifies that invalid post fields return 400/VALIDATION_FAILED and that both a
+     * malformed JWT and a signed JWT missing roles return 401/INVALID_TOKEN. This
+     * protects the validation and authentication boundaries from incomplete input.
+     */
     @Test
     void validatesPayloadAndRejectsBadTokens() {
         ResponseEntity<Map> invalid = rest.exchange("/api/post/createPost", HttpMethod.POST,
@@ -84,6 +94,11 @@ class PostServiceIT {
         assertThat(missingRoles.getBody()).containsEntry("code", "INVALID_TOKEN");
     }
 
+    /**
+     * Verifies that the feed returns newest posts first and that deleting an unknown ID
+     * returns 404/RESOURCE_NOT_FOUND. This protects both the ordering contract used by
+     * the UI and the stable HTTP error contract for missing data.
+     */
     @Test
     void returnsNewestPostsFirstAndMissingDeleteIsNotFound() {
         posts.save(post("First", new Date(1_000)));

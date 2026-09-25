@@ -1,6 +1,6 @@
 # Trivy trong CI BlogApp
 
-**Trạng thái 2026-09-25:** quét source/config được tích hợp vào CI; image scan chỉ build và quan sát trên `main` hoặc `workflow_dispatch`. Chưa có GHCR push, release manifest, Sonar gate đang chạy, SARIF upload hoặc required rule cho Trivy. Không mô tả đây là release pipeline production đã hoàn tất.
+**Trạng thái 2026-09-25:** quét source/config được tích hợp vào CI; image scan chỉ build và quan sát trên `main` hoặc `workflow_dispatch`. Sonar backend đã được tích hợp từ main qua PR #4. Chưa có GHCR push, release manifest, SARIF upload hoặc required rule cho Trivy. Không mô tả đây là release pipeline production đã hoàn tất.
 
 ## Phạm vi và luồng
 

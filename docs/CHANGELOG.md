@@ -13,6 +13,47 @@ This is the concise handoff log for implementation work. The architecture source
 - Changed: added pinned Trivy source/config PR checks, a five-image post-merge audit and CycloneDX artifacts, a fail-closed exception policy with tests, explicit non-root frontend Docker user, LF checkout rules, and `docs/TRIVY-PRODUCTION-CI.md`.
 - Verified: `bash scripts/verify.sh` with JDK 17 passed four independent Maven verifies plus frontend test/build; `docker compose --project-name blogapp-trivy-verify --env-file <temporary-env> up --build -d` made all six containers healthy, and `bash scripts/smoke-test.sh` passed. Local Trivy v0.74.0 scanned five source manifests (244 fixable HIGH/CRITICAL), five Dockerfiles (0 HIGH/CRITICAL), and five built image IDs (186 fixable HIGH/CRITICAL); five CycloneDX SBOMs were generated. Six policy unit tests, `actionlint` on backend CI, and `docker compose config --quiet` passed. The source enforce policy correctly failed on the measured debt.
 - Pending: remediate source/image findings, verify actual GitHub Actions runs and exception expiry behavior on PRs, then enable required checks and implement the digest-based GHCR release gate. SonarQube Cloud remains unconfigured.
+## 2026-09-25 — Prepared Sonar integration branch with documented tests
+
+- Changed: added purpose-and-risk comments to 31 Java test methods across the four services; carried the validated Sonar CI configuration into a separate integration branch.
+- Verified: `JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home/bin:$PATH ./scripts/verify.sh` passed four independent Maven builds, 31 Java tests, JaCoCo checks, and the frontend production build; frontend currently has no tests. `git diff --check` passed.
+- Pending: review and merge the integration PR, confirm backend Sonar analysis on `main`, and run the manual frontend baseline.
+
+## 2026-09-25 — Enabled required backend and Sonar checks
+
+- Changed: activated the `main` ruleset requiring a PR, `Sonar quality gate`, and `Backend test gate` from GitHub Actions.
+- Verified: PR #2 run 36094511394 passed four backend verifies, four Sonar scans, four SonarQube Cloud checks, and both aggregate gates; GitHub shows ruleset 23979594 Active for `main`.
+- Pending: create a review-ready integration PR after validation, confirm a baseline run on `main`, and run the manual frontend baseline.
+
+## 2026-09-25 — Added SonarQube Cloud CI configuration
+
+- Changed: mapped the five supplied Sonar project keys; added four backend scans after JaCoCo and a failing aggregate Sonar gate; added a manual frontend baseline scan and documented the required GitHub secret/variable.
+- Verified: both workflow YAML files parsed; all four project mappings and the aggregate gate were checked; `./scripts/verify.sh` passed four independent Maven builds, JaCoCo checks and the frontend production build with local network/Docker access; all four JaCoCo XML and bytecode inputs exist.
+- Pending: run real Sonar analyses on main and an internal PR, inspect scope/coverage, then enable required checks; frontend tests and LCOV remain pending.
+
+## 2026-09-25 — Documented API Gateway tests
+
+- Changed: added purpose-and-risk comments to all 5 API Gateway test methods covering context startup, auth/post/comment routing, path and query preservation, upstream response propagation, route isolation, and unknown paths.
+- Verified: `cd api-gateway-server && ./mvnw -B -ntp clean verify` passed 1 context test and 4 WireMock route integration tests; the JaCoCo report was generated.
+- Pending: none.
+
+## 2026-09-25 — Documented comment service tests
+
+- Changed: added purpose-and-risk comments to all 8 comment service test methods covering timestamps, post filtering, ordering, ownership, validation, JWT contracts, and missing resources.
+- Verified: `cd commentservice && ./mvnw -B -ntp clean verify` passed 5 unit tests and 3 MySQL 8.4 Testcontainers integration tests; the JaCoCo coverage checks passed.
+- Pending: none.
+
+## 2026-09-25 — Documented post service tests
+
+- Changed: added purpose-and-risk comments to all 7 post service test methods covering timestamps, ownership, validation, JWT contracts, feed ordering, and missing resources.
+- Verified: `cd postservice && ./mvnw -B -ntp clean verify` passed 4 unit tests and 3 MySQL 8.4 Testcontainers integration tests; the JaCoCo coverage checks passed.
+- Pending: none.
+
+## 2026-09-25 — Documented user authentication tests
+
+- Changed: added purpose-and-risk comments to all 11 test methods covering JWT behavior, user/role service logic, HTTP authentication contracts, and the V1-to-latest Flyway migration.
+- Verified: `cd userauthservice && ./mvnw -B -ntp clean verify` passed 7 unit tests and 4 MySQL 8.4 Testcontainers integration tests; the JaCoCo coverage checks passed.
+- Pending: none.
 
 ## 2026-09-25 — Designed SonarQube Cloud CI gate
 

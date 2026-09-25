@@ -2,6 +2,7 @@ name: Backend CI
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -125,6 +126,24 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: ./mvnw -B -ntp clean verify
 
+      - name: Require Sonar analysis inputs
+        working-directory: ${{ matrix.module }}
+        run: |
+          test -s target/site/jacoco/jacoco.xml
+          test -d target/classes
+          test -d target/test-classes
+
+      - name: Upload Sonar analysis inputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sonar-inputs-${{ matrix.module }}
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            ${{ matrix.module }}/target/classes/
+            ${{ matrix.module }}/target/test-classes/
+            ${{ matrix.module }}/target/site/jacoco/jacoco.xml
+
       - name: Upload test and coverage reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -136,6 +155,93 @@ jobs:
             ${{ matrix.module }}/target/surefire-reports/
             ${{ matrix.module }}/target/failsafe-reports/
             ${{ matrix.module }}/target/site/jacoco/
+
+  sonar:
+    name: Sonar ${{ matrix.module }}
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: userauthservice
+            project_key: vinh5905_blog_app_microservices_userauthservice
+            coverage_exclusions: '**/*Application.java,**/dto/**,**/request/**,**/response/**,**/model/User.java,**/model/Role.java'
+          - module: postservice
+            project_key: vinh5905_blog_app_microservices_postservice
+            coverage_exclusions: '**/*Application.java,**/dto/**,**/request/**,**/model/**'
+          - module: commentservice
+            project_key: vinh5905_blog_app_microservices_commentservice
+            coverage_exclusions: '**/*Application.java,**/dto/**,**/request/**,**/model/**'
+          - module: api-gateway-server
+            project_key: vinh5905_blog_app_microservices_api-gateway-server
+            coverage_exclusions: ''
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Temurin JDK 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: ${{ matrix.module }}/pom.xml
+
+      - name: Download matching build outputs
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: sonar-inputs-${{ matrix.module }}
+          path: ${{ matrix.module }}/target
+
+      - name: Require Sonar configuration and reports
+        working-directory: ${{ matrix.module }}
+        env:
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+        run: |
+          test -n "$SONAR_ORGANIZATION"
+          test -s target/site/jacoco/jacoco.xml
+          test -d target/classes
+          test -d target/test-classes
+
+      - name: Analyze module and wait for Quality Gate
+        working-directory: ${{ matrix.module }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_REGION: ${{ vars.SONAR_REGION }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ matrix.project_key }}
+          SONAR_COVERAGE_EXCLUSIONS: ${{ matrix.coverage_exclusions }}
+        run: |
+          test -n "$SONAR_TOKEN"
+          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.organization="$SONAR_ORGANIZATION" \
+            -Dsonar.java.jdkHome="$JAVA_HOME" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+            -Dsonar.coverage.exclusions="$SONAR_COVERAGE_EXCLUSIONS" \
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=600
+
+  sonar-quality-gate:
+    name: Sonar quality gate
+    if: always()
+    needs: sonar
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every Sonar analysis to pass
+        env:
+          SONAR_RESULT: ${{ needs.sonar.result }}
+        run: test "$SONAR_RESULT" = success
 
   backend-test-gate:
     name: Backend test gate

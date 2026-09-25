@@ -46,6 +46,11 @@ class CommentServiceIT {
         comments.deleteAll();
     }
 
+    /**
+     * Verifies the complete ownership contract against MySQL 8.4: create uses the JWT
+     * subject instead of a client-supplied username, a different user receives
+     * 403/NOT_OWNER without data loss, and the real owner can delete with 204.
+     */
     @Test
     void createsWithAuthenticatedIdentityAndEnforcesOwnership() {
         ResponseEntity<Map> created = rest.exchange("/api/comment/addComment", HttpMethod.POST,
@@ -64,6 +69,11 @@ class CommentServiceIT {
                 entity(token("alice"), null), Void.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
+    /**
+     * Verifies that an invalid post ID or empty content returns 400/VALIDATION_FAILED,
+     * while both a malformed JWT and a signed JWT missing roles return
+     * 401/INVALID_TOKEN. This protects the validation and authentication boundaries.
+     */
     @Test
     void validatesPayloadAndRejectsBadTokens() {
         ResponseEntity<Map> invalid = rest.exchange("/api/comment/addComment", HttpMethod.POST,
@@ -82,6 +92,11 @@ class CommentServiceIT {
         assertThat(missingRoles.getBody()).containsEntry("code", "INVALID_TOKEN");
     }
 
+    /**
+     * Verifies that the API returns only comments for the requested post, ordered newest
+     * first, and maps deletion of an unknown ID to 404/RESOURCE_NOT_FOUND. This protects
+     * post isolation, UI ordering, and the stable missing-resource error contract.
+     */
     @Test
     void returnsOnlyRequestedPostNewestFirstAndMissingDeleteIsNotFound() {
         comments.save(comment(7L, "old", new Date(1_000)));

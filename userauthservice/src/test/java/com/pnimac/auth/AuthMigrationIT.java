@@ -18,6 +18,12 @@ class AuthMigrationIT {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.0");
 
+    /**
+     * Verifies a real MySQL 8.4 upgrade from V1 to the latest schema: pre-existing user
+     * data survives, Flyway validates the resulting history, and the new unique-email
+     * constraint is enforced. This protects production upgrades from data loss and
+     * schema rules that exist only in application code.
+     */
     @Test
     void migratesV1DataToLatestAndEnforcesUniqueEmail() throws Exception {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())

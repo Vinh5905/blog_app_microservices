@@ -21,6 +21,11 @@ class JwtUtilTest {
         ReflectionTestUtils.setField(jwtUtil, "expiration", 3600L);
     }
 
+    /**
+     * Verifies that a newly issued token preserves the authenticated username and
+     * roles, has a future expiry, and validates for the same user. This protects the
+     * JWT contract consumed by the gateway-facing services.
+     */
     @Test
     void generatesExpectedIdentityAndRoles() {
         User user = new User("alice", "secret", List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -32,6 +37,10 @@ class JwtUtilTest {
         assertThat(jwtUtil.validateToken(token, user)).isTrue();
     }
 
+    /**
+     * Verifies that an already expired token is rejected with ExpiredJwtException.
+     * This prevents old credentials from remaining usable after their lifetime.
+     */
     @Test
     void rejectsExpiredToken() {
         ReflectionTestUtils.setField(jwtUtil, "expiration", -1L);
@@ -40,6 +49,10 @@ class JwtUtilTest {
                 .isInstanceOf(io.jsonwebtoken.ExpiredJwtException.class);
     }
 
+    /**
+     * Verifies that input which is not a JWT cannot be parsed as an identity. This
+     * protects authentication code from accepting malformed bearer credentials.
+     */
     @Test
     void rejectsMalformedToken() {
         assertThatThrownBy(() -> jwtUtil.extractUsername("not-a-jwt")).isInstanceOf(RuntimeException.class);

@@ -14,6 +14,74 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  trivy-source:
+    name: Trivy source gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: false
+
+      - name: Restore vulnerability database cache
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-${{ github.ref }}-
+
+      - name: Scan source dependencies
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-source"
+          trivy fs --scanners vuln --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
+
+      - name: Scan Dockerfiles and infrastructure configuration
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: trivy config --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
+
+      - name: Record scanner and source versions
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/trivy-source/source-sha.txt"
+
+      - name: Validate Compose syntax
+        env:
+          JWT_SECRET: ci-placeholder
+          MYSQL_ROOT_PASSWORD: ci-placeholder
+          USER_DB_PASSWORD: ci-placeholder
+          POST_DB_PASSWORD: ci-placeholder
+          COMMENT_DB_PASSWORD: ci-placeholder
+        run: docker compose config --quiet
+
+      - name: Enforce Trivy policy
+        run: |
+          status=0
+          python3 scripts/trivy_policy.py --stage config --mode enforce --report "$RUNNER_TEMP/trivy-source/config.json" --summary "$RUNNER_TEMP/trivy-source/config-summary.json" || status=1
+          python3 scripts/trivy_policy.py --stage source --mode enforce --report "$RUNNER_TEMP/trivy-source/source.json" --summary "$RUNNER_TEMP/trivy-source/source-summary.json" || status=1
+          exit "$status"
+
+      - name: Upload Trivy source evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/trivy-source/
+          if-no-files-found: error
+          retention-days: 14
+
   verify:
     name: Verify ${{ matrix.module }}
     runs-on: ubuntu-24.04
@@ -66,3 +134,56 @@ jobs:
         env:
           VERIFY_RESULT: ${{ needs.verify.result }}
         run: test "$VERIFY_RESULT" = success
+
+  trivy-images:
+    name: Trivy image baseline
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: backend-test-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: false
+
+      - name: Restore vulnerability database cache
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-image-db-${{ runner.os }}-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-image-db-${{ runner.os }}-${{ github.ref }}-
+
+      - name: Build and inspect the five release image candidates
+        shell: bash
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trivy-images"
+          for module in blog-client api-gateway-server userauthservice postservice commentservice; do
+            ref="blogapp-ci/${module}:${GITHUB_SHA}"
+            DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --tag "$ref" "$module"
+            docker image inspect --format='{{.Id}}' "$ref" > "$RUNNER_TEMP/trivy-images/${module}.image-id"
+            trivy image --image-src docker --scanners vuln --list-all-pkgs --timeout 20m --format json --output "$RUNNER_TEMP/trivy-images/${module}.json" "$ref"
+            python3 scripts/trivy_policy.py --stage image --module "$module" --expected-image "$ref" --image-id-file "$RUNNER_TEMP/trivy-images/${module}.image-id" --mode audit --report "$RUNNER_TEMP/trivy-images/${module}.json" --summary "$RUNNER_TEMP/trivy-images/${module}.summary.json"
+            trivy convert --scanners vuln --format cyclonedx --output "$RUNNER_TEMP/trivy-images/${module}.cdx.json" "$RUNNER_TEMP/trivy-images/${module}.json"
+          done
+          trivy version --format json > "$RUNNER_TEMP/trivy-images/trivy-version.json"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/trivy-images/source-sha.txt"
+
+      - name: Upload Trivy image evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-images-${{ github.run_id }}
+          path: ${{ runner.temp }}/trivy-images/
+          if-no-files-found: error
+          retention-days: 14

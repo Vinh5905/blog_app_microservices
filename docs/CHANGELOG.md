@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-25 — Added Trivy source and image baseline CI
+
+- Changed: added pinned Trivy source/config PR checks, a five-image post-merge audit and CycloneDX artifacts, a fail-closed exception policy with tests, explicit non-root frontend Docker user, LF checkout rules, and `docs/TRIVY-PRODUCTION-CI.md`.
+- Verified: `bash scripts/verify.sh` with JDK 17 passed four independent Maven verifies plus frontend test/build; `docker compose --project-name blogapp-trivy-verify --env-file <temporary-env> up --build -d` made all six containers healthy, and `bash scripts/smoke-test.sh` passed. Local Trivy v0.74.0 scanned five source manifests (244 fixable HIGH/CRITICAL), five Dockerfiles (0 HIGH/CRITICAL), and five built image IDs (186 fixable HIGH/CRITICAL); five CycloneDX SBOMs were generated. Six policy unit tests, `actionlint` on backend CI, and `docker compose config --quiet` passed. The source enforce policy correctly failed on the measured debt.
+- Pending: remediate source/image findings, verify actual GitHub Actions runs and exception expiry behavior on PRs, then enable required checks and implement the digest-based GHCR release gate. SonarQube Cloud remains unconfigured.
+
 ## 2026-09-25 — Designed SonarQube Cloud CI gate
 
 - Changed: added `docs/SONARQUBE-CLOUD-CI-DESIGN.md` for five monorepo projects, staged backend/frontend Quality Gates, coverage imports, CI checks, token boundaries, failure handling, and acceptance evidence.

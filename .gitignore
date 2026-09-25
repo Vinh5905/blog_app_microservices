@@ -7,6 +7,8 @@
 **/.settings/
 **/target/
 **/node_modules/
+**/__pycache__/
+*.pyc
 blog-client/build/
 .env
 .kilo/

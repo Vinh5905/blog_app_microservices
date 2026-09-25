@@ -6,7 +6,8 @@ This is the concise handoff log for implementation work. The architecture source
 
 - Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution. Missing Maven metadata uses Google's public Maven Central mirror through scanner-specific configuration; merged main's Sonar integration into the Trivy branch.
 - Verified: `./mvnw -B -ntp dependency:go-offline -DskipTests` passed for all four modules with JDK 17; `bash scripts/verify.sh` passed on the merged branch after starting Docker. GitHub run [36143792724](https://github.com/Vinh5905/blog_app_microservices/actions/runs/36143792724) passed backend/Sonar gates, both Trivy scans, Compose validation and artifact upload; source policy correctly failed on 244 fixable HIGH/CRITICAL findings, config had 0. The mirror resolved the HTTP 429 failures seen in prior runs. Added six policy regression tests and post-scan database metadata recording to CI; local tests and actionlint passed.
-- Pending: remediate 244 source findings and 186 local image findings; validate image scanning on GitHub and the release/ruleset acceptance criteria.
+- Verified: final code commit 471a852 passed backend/Sonar and Trivy execution/policy tests in PR run 36144756912; its source gate correctly failed on 244 findings. Manual run 36144854263 passed the Trivy image baseline job; downloaded artifacts contained five matching image IDs, five CycloneDX SBOMs and 186 findings. The overall manual run is not green: source policy fails, and the inherited Sonar condition skips analysis on a non-main manual run while its aggregate gate fails.
+- Pending: remediate 244 source findings and 186 image findings; complete release/ruleset acceptance criteria.
 
 ## 2026-09-25 — Added Trivy source and image baseline CI
 

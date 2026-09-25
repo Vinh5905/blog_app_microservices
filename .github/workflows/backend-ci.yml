@@ -64,7 +64,7 @@ jobs:
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: |
-          trivy fs --scanners vuln --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
+          trivy fs --config security/trivy/trivy.yaml --scanners vuln --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
 
       - name: Scan Dockerfiles and infrastructure configuration
         env:

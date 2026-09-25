@@ -4,9 +4,9 @@ This is the concise handoff log for implementation work. The architecture source
 
 ## 2026-09-25 — Prepare Maven cache for Trivy on GitHub
 
-- Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution.
+- Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution. Missing Maven metadata uses Google's public Maven Central mirror through scanner-specific configuration; merged main's Sonar integration into the Trivy branch.
 - Verified: initial GitHub run `36095994446` passed all backend checks but Trivy source scanning failed on Maven Central HTTP 429; local `./mvnw -B -ntp dependency:go-offline -DskipTests` passed for all four modules with JDK 17.
-- Pending: verify the corrected workflow on GitHub; dependency remediation and release acceptance remain pending.
+- Pending: verify the corrected workflow on GitHub after run `36142377027` still hit Maven Central HTTP 429 for uncached metadata; dependency remediation and release acceptance remain pending.
 
 ## 2026-09-25 — Added Trivy source and image baseline CI
 

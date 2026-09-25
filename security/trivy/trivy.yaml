@@ -1,0 +1,8 @@
+# Resolve missing Maven metadata through Google's public Maven Central mirror.
+# Vulnerability data still comes from the Trivy vulnerability database.
+scan:
+  maven:
+    mirrors:
+      - source: https://repo.maven.apache.org/maven2/
+        targets:
+          - https://maven-central.storage-download.googleapis.com/maven2/

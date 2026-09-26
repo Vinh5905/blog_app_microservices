@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-26 — Reject missing latest release evidence during scheduled scans
+
+- Changed: daily rescan only selects the newest successful main run; missing or expired evidence fails instead of falling back to an older published candidate.
+- Verified: `python -m unittest discover -s scripts -p 'test_*.py' -v` passed 17 tests, including the missing-manifest regression. Initial GitHub run 36232554559 passed frontend, all four backend builds and all four Sonar analyses before being superseded by the rescan fix. Final GitHub run results and artifacts are tracked on [PR #3](https://github.com/Vinh5905/blog_app_microservices/pull/3).
+- Pending: final PR source/image gate run, owner ruleset activation, first trusted main publication and scheduled-rescan execution.
+
 ## 2026-09-26 — Remediate dependencies and enforce Trivy release gates
 
 - Changed: upgraded four independent Java modules to Boot 3.5.16/Cloud 2025.0.3 with Netty/Tomcat/BouncyCastle fixes and the new gateway route namespace; replaced CRA with Vite/Vitest and two login tests; pinned container bases and patched frontend libexpat. Source scans include dev dependencies. CI adds frontend and enforcing five-image gates on PRs, main-only GHCR digest publishing with Cosign signatures/SBOM/provenance verification, completion manifests, and daily published-digest rescans. Added architecture decision and owner handoff; no security exceptions were added.

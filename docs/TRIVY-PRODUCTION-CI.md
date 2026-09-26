@@ -1,6 +1,6 @@
 # Trivy trong CI BlogApp
 
-**Cập nhật 2026-09-26:** nhánh triển khai chuyển source/config/image sang gate chặn, bổ sung frontend test/build, phát hành GHCR theo digest với Cosign và quét lại image hàng ngày. Local verification đã pass; kiểm chứng GitHub và phát hành trusted `main` được ghi riêng trong CHANGELOG. Không coi code đã viết là bằng chứng phát hành thành công.
+**Cập nhật 2026-09-26:** nhánh triển khai chuyển source/config/image sang gate chặn, bổ sung frontend test/build, phát hành GHCR theo digest với Cosign và quét lại image hàng ngày. Local verification đã pass; bằng chứng tại thời điểm commit được ghi trong CHANGELOG, kết quả GitHub mới nhất ở [PR #3](https://github.com/Vinh5905/blog_app_microservices/pull/3). Phát hành trusted `main` cần kiểm chứng riêng sau merge. Không coi code đã viết là bằng chứng phát hành thành công.
 
 ## Luồng hiện tại
 

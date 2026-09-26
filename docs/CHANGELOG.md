@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-26 — Remediate dependencies and enforce Trivy release gates
+
+- Changed: upgraded four independent Java modules to Boot 3.5.16/Cloud 2025.0.3 with Netty/Tomcat/BouncyCastle fixes and the new gateway route namespace; replaced CRA with Vite/Vitest and two login tests; pinned container bases and patched frontend libexpat. Source scans include dev dependencies. CI adds frontend and enforcing five-image gates on PRs, main-only GHCR digest publishing with Cosign signatures/SBOM/provenance verification, completion manifests, and daily published-digest rescans. Added architecture decision and owner handoff; no security exceptions were added.
+- Verified: `bash scripts/verify.sh` with JDK 17 passed all four Maven clean verifies, JaCoCo checks, two frontend tests and Vite build. `docker compose --project-name blogapp-trivy-hardening --env-file <temporary-env> up --build -d` produced six healthy containers; `bash scripts/smoke-test.sh` passed same-origin API, malformed JWT and ownership checks, including after the libexpat rebuild. Trivy 0.74.0 source scan with `--include-dev-deps`, config scan and five exact-image-ID scans passed enforce policy: 0 fixable HIGH/CRITICAL source/image findings, 0 HIGH/CRITICAL config findings, 0 suppressed; five CycloneDX SBOMs generated. `python -m unittest discover -s scripts -p 'test_*.py' -v` passed 16 policy/release/rescan tests; actionlint and `bash -n scripts/build-scan-images.sh` passed.
+- Pending: actual GitHub PR verification; owner activation and negative acceptance of required Trivy/frontend checks (current account has push but no admin); first trusted main GHCR/Cosign release and scheduled-rescan run. Mocked publication tests are not registry/signature execution evidence. GitOps/CD and other security tools remain separate architecture milestones.
+
 ## 2026-09-25 — Prepare Maven cache for Trivy on GitHub
 
 - Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution. Missing Maven metadata uses Google's public Maven Central mirror through scanner-specific configuration; merged main's Sonar integration into the Trivy branch.

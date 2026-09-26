@@ -1,5 +1,56 @@
 # Trivy trong CI BlogApp
 
+**Cập nhật 2026-09-26:** nhánh triển khai chuyển source/config/image sang gate chặn, bổ sung frontend test/build, phát hành GHCR theo digest với Cosign và quét lại image hàng ngày. Local verification đã pass; kiểm chứng GitHub và phát hành trusted `main` được ghi riêng trong CHANGELOG. Không coi code đã viết là bằng chứng phát hành thành công.
+
+## Luồng hiện tại
+
+```text
+PR / push main / chạy tay
+  ├─ 4 Maven clean verify → Backend test gate → Sonar → Sonar quality gate
+  ├─ npm ci + Vitest + Vite build → Frontend test gate
+  └─ Backend test gate → Trivy source/config enforce
+       └─ cùng backend/frontend gate → build 5 image → Trivy image enforce + SBOM
+
+Chỉ push main, mọi gate trên đều pass
+  → chuyển đúng image đã scan sang job publish cùng run/attempt
+  → kiểm tra lại source/config/image policy và image ID trước lần push đầu tiên
+  → GHCR → lấy digest → pull digest và đối chiếu image ID
+  → Cosign sign + attest SBOM/provenance + verify
+  → đủ 5 image mới xuất release-manifest.json
+
+Hàng ngày 02:17 UTC / chạy tay trên main
+  → đọc verified release artifact của main → verify signature
+  → pull đúng digest → Trivy với DB hiện hành → enforce + lưu report
+```
+
+PR cũng quét image để phát hiện CVE trước merge. Không có registry write hoặc OIDC trên PR. Run tay ở nhánh feature bỏ qua Sonar và publish; không được dùng nó thay PR hoặc main quality gate. Source scan bật `--include-dev-deps`, nên việc chuyển công cụ build sang devDependencies không làm chúng biến mất khỏi phạm vi quét. Không dùng ngoại lệ cho remediation này.
+
+## Release contract
+
+`build-scan-images.sh` build một lần, lưu image ID, JSON, CycloneDX và source SHA; chỉ xuất tar candidates trên push main. Artifact phân biệt cả run ID và run attempt. `publish_images.py` đọc lại report gốc và exception policy, xác nhận đủ năm image/SBOM và image ID đã load trước khi push bất kỳ image nào. Job publish không rebuild, không tải artifact từ PR hay workflow khác.
+
+GHCR repository: `ghcr.io/<owner>/<repo>/<module>`. Tag truy vết: `<full-sha>-<run-id>-<attempt>`; định danh dùng để triển khai luôn là `@sha256:...`. Sau push, CI lấy registry manifest digest, pull lại và so sánh Docker image ID với image đã scan. Không dùng tag `latest` làm release identity.
+
+Cosign 3.1.3 được cài qua installer pin commit; keyless signature và hai attestation (`cyclonedx`, `slsaprovenance1`) đều phải verify issuer `https://token.actions.githubusercontent.com`, identity `https://github.com/<owner>/<repo>/.github/workflows/backend-ci.yml@refs/heads/main` và workflow SHA đúng commit. Không tắt kiểm chứng transparency log. Provenance ghi source commit, module, platform, workflow và run URL; không tuyên bố đạt một cấp SLSA cụ thể.
+
+Artifact `verified-release-<run-id>-<attempt>` giữ 90 ngày, chứa manifest và verification evidence. Manifest schema 1 có `kind: ci-release-candidate`, source SHA, run URL, identity/issuer, đủ năm image digest, image ID và SBOM hash. Chỉ tạo manifest sau khi mọi bước ký/verify thành công. Nếu lỗi giữa chừng, registry có thể còn image/signature đã push nhưng **không có manifest hoàn tất**; consumer không được tự tìm tag để deploy. Rerun tạo tag riêng theo attempt, không ghi đè manifest cũ. Tar candidates giữ 1 ngày; scan reports/SBOM giữ 14 ngày. SBOM/provenance đã ký cũng gắn với digest trong registry.
+
+Manifest này chưa thay thế manifest GitOps mục 5.2: chưa có chart digest, migration plan, staging evidence hay phê duyệt prod. Consumer triển khai phải tự verify chữ ký/attestation theo cùng trust policy. Workflow quét hàng ngày theo dõi CI release gần nhất, không biết digest đang được deploy nếu chưa có inventory CD. Không tìm được manifest còn hạn hoặc scan lỗi thì job thất bại, không báo sạch giả. CVE mới làm rescan đỏ; cần remediation và release mới, không tự xóa image/rollback production. Maintainer theo dõi GitHub Actions notifications; chưa tích hợp kênh cảnh báo bên ngoài.
+
+## Kiểm chứng và việc owner cần làm
+
+Ngày 2026-09-26, local Trivy 0.74.0 với DB cập nhật cùng ngày ghi **0 HIGH/CRITICAL có bản vá** ở source và cả năm image, **0 HIGH/CRITICAL cấu hình** trên đủ năm Dockerfile, **0 ngoại lệ**. Đây là số finding theo policy, không có nghĩa không còn CVE mức thấp hơn hoặc chưa có bản vá. `scripts/verify.sh` pass bốn Maven verify độc lập và hai test frontend/build. Compose có sáu container healthy; smoke test pass luồng `/api`, JWT lỗi và ownership. Policy/release regression tests chứng minh CVE, sai SHA/image ID, report thiếu và verify chữ ký lỗi không tạo manifest. Test giả lập không thay thế GHCR/Cosign thật trên main.
+
+Quyền tài khoản hiện tại là push/triage, không có admin/maintain. Sau khi PR xanh, owner giữ nguyên hai required checks hiện có (`Backend test gate`, `Sonar quality gate`) và thêm `Frontend test gate`, `Trivy source gate`, `Trivy image gate` từ GitHub Actions vào ruleset main. Bật yêu cầu branch cập nhật trước merge. Kiểm tra PR CVE/config HIGH bị chặn; trước đó baseline PR đã đỏ vì CVE nhưng chưa chứng minh required Trivy ruleset chặn merge.
+
+Owner review/merge PR rồi kiểm tra `Publish verified images` trên đúng main SHA: năm GHCR digest, 15 kết quả verify và artifact manifest đủ năm module. Repo phải được quyền ghi GHCR packages; nếu package đã tồn tại, cấp GitHub Actions access cho repo trong package settings. Không cần tạo PAT hoặc private signing key. Sau lần phát hành đầu, chạy `Trivy published image rescan` từ main và đối chiếu digest với manifest. Các bước chưa có run thực tế không được đánh dấu nghiệm thu xong.
+
+Phạm vi này chưa bổ sung Gitleaks, frontend lint/coverage gate, SARIF, GitOps/CD hay admission policy. Những việc đó thuộc các hạng mục khác của kiến trúc, không được tính là đã hoàn thiện chỉ nhờ Trivy xanh.
+
+## Baseline và thiết kế ban đầu (lịch sử)
+
+Phần dưới lưu trạng thái trước remediation để đối chiếu, không mô tả workflow hiện tại.
+
 **Trạng thái 2026-09-25:** quét source/config được tích hợp vào CI; image scan chỉ build và quan sát trên `main` hoặc `workflow_dispatch`. Sonar backend đã được tích hợp từ main qua PR #4. Chưa có GHCR push, release manifest, SARIF upload hoặc required rule cho Trivy. Không mô tả đây là release pipeline production đã hoàn tất.
 
 ## Phạm vi và luồng

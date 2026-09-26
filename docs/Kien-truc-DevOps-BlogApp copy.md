@@ -222,6 +222,8 @@ RDS nằm ngoài Kubernetes. Buckets state, telemetry và backup nằm trong acc
 
 Mã Java khai báo Java 17, Spring Boot 3.3.1 và Spring Cloud 2023.0.1. README nói MySQL 8.4.0; frontend dùng React 18 và react-scripts. Đây là các phiên bản đang có trong nguồn, không phải khuyến nghị cài nguyên trạng vào prod năm 2026. Cần kiểm tra compatibility matrix, support status và dependency scan rồi nâng phiên bản theo PR riêng.
 
+**Quyết định remediation 2026-09-26:** baseline ở đoạn trên là kết quả audit ban đầu. Nhánh Trivy nâng bốn module lên Boot 3.5.16/Cloud 2025.0.3 trên Java 17, vá Netty 4.1.138.Final/Tomcat 10.1.60 và BouncyCastle 1.86 ở gateway. Gateway dùng starter/prefix `server.webflux` theo Cloud 2025. Frontend giữ React 18, thay CRA bằng Vite 8.3.1 và Vitest 5.0.2 để loại dependency đã lỗi thời; JSX chuyển sang `.jsx`, output vẫn là `build`, API vẫn cùng origin `/api`. Node build/CI dùng 22. Base images pin digest; frontend vá libexpat 2.8.5-r0 rồi trở về USER 101. Thực hiện cùng PR Trivy theo yêu cầu triển khai của nhóm; kiểm chứng compatibility bằng bốn build độc lập, integration test và smoke test, không chỉ dựa vào số CVE.
+
 | **Module**         | **Vai trò thực tế**                   | **Xử lý trong kiến trúc đích**                     |
 | ------------------ | ------------------------------------- | -------------------------------------------------- |
 | blog-client        | React, axios gọi API                  | Giữ, đổi sang same-origin /api, build static image |
@@ -447,6 +449,8 @@ Job mặc định chỉ contents:read. Job push thêm packages:write; job ký ke
 Cache Maven giúp nhanh hơn nhưng runner sạch vẫn phải build được. Nếu vẫn còn dependency userauthservice, build thứ tự hoặc dùng reactor chỉ là bước sửa tạm; mục tiêu là release độc lập các service. Thử pipeline từ runner không có ~/.m2 cũ là một test nghiệm thu quan trọng.
 
 Concurrency CI có thể hủy build cũ cùng PR. Workflow release không được hủy giữa lúc tạo release manifest và cập nhật promotion mà để trạng thái nửa chừng; dùng khóa theo environment và thao tác idempotent. Ghi run ID, commit, SHA digest và mọi ngoại lệ vào báo cáo release.
+
+**Triển khai Trivy 2026-09-26:** image gate chạy thêm trên PR để phát hiện sớm lỗi base image. Chỉ push `main` được chuyển đúng năm image đã scan sang job GHCR qua artifact cùng run/attempt; job này phụ thuộc backend, frontend, Sonar, source và image gate. Manifest `ci-release-candidate` chỉ xuất sau push, đối chiếu image ID, ký và verify đủ năm digest. Đây là đầu vào CI cho manifest triển khai mục 5.2, chưa chứa chart/migration/staging approval và không tự cấp quyền deploy. Job hàng ngày quét lại digest của CI release đã hoàn tất gần nhất, không suy diễn đó là release đang chạy trên prod. Chi tiết, giới hạn và chứng cứ ở [TRIVY-PRODUCTION-CI.md](TRIVY-PRODUCTION-CI.md).
 
 # 8 Terraform và bootstrap AWS
 

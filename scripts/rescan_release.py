@@ -36,7 +36,9 @@ def main(output):
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("scheduled rescan must run from main")
     output.mkdir(parents=True, exist_ok=True)
-    runs = json.loads(command("gh", "api", f"repos/{repo}/actions/workflows/backend-ci.yml/runs?branch=main&event=push&status=success&per_page=50"))
+    # A missing/expired newest manifest must fail monitoring, not fall back to an
+    # older candidate that could make the current published version look clean.
+    runs = json.loads(command("gh", "api", f"repos/{repo}/actions/workflows/backend-ci.yml/runs?branch=main&event=push&status=success&per_page=1"))
     selected = None
     for run in runs["workflow_runs"]:
         artifacts = json.loads(command("gh", "api", f"repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100"))

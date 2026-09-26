@@ -2,6 +2,7 @@
 # Build once; scanning and publishing must use these exact image IDs.
 set -euo pipefail
 : "${GITHUB_SHA:?}" "${GITHUB_REPOSITORY:?}" "${RUNNER_TEMP:?}"
+python3 scripts/trivy_inputs.py
 evidence="$RUNNER_TEMP/trivy-images"
 mkdir -p "$evidence"
 printf '%s\n' "$GITHUB_SHA" > "$evidence/source-sha.txt"
@@ -14,7 +15,7 @@ for module in blog-client api-gateway-server userauthservice postservice comment
   docker build --platform linux/amd64 --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
     --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$ref" "$module"
   docker image inspect --format='{{.Id}}' "$ref" > "$evidence/${module}.image-id"
-  trivy image --image-src docker --scanners vuln --list-all-pkgs --timeout 20m \
+  trivy image --config security/trivy/trivy.yaml --ignorefile /dev/null --image-src docker --scanners vuln --list-all-pkgs --timeout 20m \
     --format json --output "$evidence/${module}.json" "$ref"
   python3 scripts/trivy_policy.py --stage image --module "$module" --expected-image "$ref" \
     --image-id-file "$evidence/${module}.image-id" --mode enforce \

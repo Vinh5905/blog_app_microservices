@@ -27,7 +27,13 @@ PR cũng quét image để phát hiện CVE trước merge. Không có registry 
 
 ## Release contract
 
-`build-scan-images.sh` build một lần, lưu image ID, JSON, CycloneDX và source SHA; chỉ xuất tar candidates trên push main. Artifact phân biệt cả run ID và run attempt. `publish_images.py` đọc lại report gốc và exception policy, xác nhận đủ năm image/SBOM và image ID đã load trước khi push bất kỳ image nào. Job publish không rebuild, không tải artifact từ PR hay workflow khác.
+**Bản vá sau review 2026-09-26:** `trivy_inputs.py` chặn file `.trivyignore*` và chỉ thị ignore của Trivy/tfsec trong Dockerfile/IaC, kể cả khi nằm ở thư mục con. Các lệnh scan dùng config được chỉ định rõ và ignorefile rỗng (`/dev/null` trên runner Linux); chỉ `security/trivy/exceptions.json` được dùng làm ngoại lệ. Guard chạy trước source scan, image build/scan, publish preflight và rescan. Các thư mục sinh ra `.git`, `.cache`, `target`, `node_modules` nằm ngoài phạm vi guard như phạm vi scan.
+
+Image policy bắt buộc package inventory OS có tên/version; bốn backend phải có inventory JAR chứa đúng module tại `app/app.jar` và Spring Boot trong `app/app.jar/BOOT-INF/lib/`. Report chỉ có OS, inventory Java rỗng hoặc JAR ngoài ứng dụng đều fail, dù image ID vẫn khớp. Frontend Nginx chỉ cần inventory OS, không yêu cầu Java.
+
+Publish tải bằng **artifact ID từ outputs của job tạo artifact**, không ghép tên từ attempt của job publish. Khi retry riêng publish, ID của job build/scan đã thành công vẫn trỏ tới artifact cũ trong cùng run; source SHA, image ID và policy vẫn được kiểm tra lại trước push. ID rỗng/sai/trùng bị chặn trước download để không rơi vào hành vi tải tất cả artifact. Artifact hết hạn/xóa vẫn fail; cần chạy lại job tạo artifact hoặc toàn bộ workflow. Thay đổi này không mở quyền publish cho PR.
+
+`build-scan-images.sh` build một lần, lưu image ID, JSON, CycloneDX và source SHA; chỉ xuất tar candidates trên push main. Tên artifact phân biệt run ID và attempt của job tạo nó; job tải dùng ID cụ thể. `publish_images.py` đọc lại report gốc và exception policy, xác nhận đủ năm image/SBOM và image ID đã load trước khi push bất kỳ image nào. Job publish không rebuild, không tải artifact từ PR hay workflow khác.
 
 GHCR repository: `ghcr.io/<owner>/<repo>/<module>`. Tag truy vết: `<full-sha>-<run-id>-<attempt>`; định danh dùng để triển khai luôn là `@sha256:...`. Sau push, CI lấy registry manifest digest, pull lại và so sánh Docker image ID với image đã scan. Không dùng tag `latest` làm release identity.
 

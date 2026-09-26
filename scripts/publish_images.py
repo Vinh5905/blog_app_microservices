@@ -15,6 +15,7 @@ import re
 import subprocess
 
 from trivy_policy import MODULES, evaluate, read_json, validate_exceptions, validate_image_identity
+from trivy_inputs import validate_scan_inputs
 
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
@@ -31,6 +32,7 @@ def preflight(evidence, source, env):
     """Validate every input before permitting the first registry mutation."""
     if env.get("GITHUB_EVENT_NAME") != "push" or env.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("publishing requires a push to main")
+    validate_scan_inputs()
     sha = env["GITHUB_SHA"]
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise ValueError("invalid source SHA")

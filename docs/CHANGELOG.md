@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-26 — Fix Trivy suppression, inventory and artifact retry gaps
+
+- Changed: added a preflight rejecting native ignore files and inline Trivy/tfsec suppressions; all scans explicitly select the scanner config and an empty ignorefile. Image policy requires OS package inventory and, for Java services, the matching application JAR plus nested Spring Boot inventory. Publish consumes producer artifact IDs through job outputs and rejects absent/invalid IDs before download, so a consumer retry does not invent artifact names for a new attempt.
+- Verified: 25 Python regression tests passed, including ignore bypasses, missing Java inventory blocking all pushes, and producer IDs surviving a consumer attempt change. `bash scripts/verify.sh` passed four independent Maven clean verifies/coverage gates, two frontend tests and build. Actionlint, shell syntax and `git diff --check` passed. Real Trivy config scan with explicit config/empty ignorefile passed on all five Dockerfiles; all five previously downloaded CI image reports passed the stronger inventory checks, while the original bypass fixture was rejected.
+- Pending: new PR CI and a real isolated GitHub artifact retry regression; results will be attached to PR #3. Owner ruleset activation and first trusted main GHCR/Cosign release remain external acceptance steps.
+
 ## 2026-09-26 — Reject missing latest release evidence during scheduled scans
 
 - Changed: daily rescan only selects the newest successful main run; missing or expired evidence fails instead of falling back to an older published candidate.

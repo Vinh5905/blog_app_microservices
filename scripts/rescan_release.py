@@ -10,6 +10,7 @@ import subprocess
 
 from publish_images import DIGEST, command
 from trivy_policy import MODULES
+from trivy_inputs import validate_scan_inputs
 
 
 def validate_manifest(manifest, repository, sha):
@@ -35,6 +36,7 @@ def main(output):
     repo = os.environ["GITHUB_REPOSITORY"]
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("scheduled rescan must run from main")
+    validate_scan_inputs()
     output.mkdir(parents=True, exist_ok=True)
     # A missing/expired newest manifest must fail monitoring, not fall back to an
     # older candidate that could make the current published version look clean.
@@ -66,7 +68,8 @@ def main(output):
             raise ValueError("registry image no longer matches the manifest")
         id_file, report = output / f"{module}.image-id", output / f"{module}.json"
         id_file.write_text(actual_id + "\n")
-        command("trivy", "image", "--image-src", "docker", "--scanners", "vuln", "--list-all-pkgs",
+        command("trivy", "image", "--config", "security/trivy/trivy.yaml", "--ignorefile", os.devnull,
+                "--image-src", "docker", "--scanners", "vuln", "--list-all-pkgs",
                 "--timeout", "20m", "--format", "json", "--output", str(report), ref)
         # Continue through policy failures to retain a report for every image.
         result = subprocess.run(["python3", "scripts/trivy_policy.py", "--stage", "image", "--module", module,

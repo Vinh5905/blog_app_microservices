@@ -1,6 +1,7 @@
 """Regression tests for the security gate's scope and exception rules."""
 
 import datetime as dt
+import copy
 import unittest
 
 from trivy_policy import (
@@ -29,6 +30,17 @@ def config_report(finding=None):
     ]}
 
 
+def image_inventory(module):
+    results = [{"Target": "ubuntu", "Class": "os-pkgs", "Type": "ubuntu",
+                "Packages": [{"Name": "libc6", "Version": "2.35"}]}]
+    if module != "blog-client":
+        results.append({"Target": "Java", "Class": "lang-pkgs", "Type": "jar", "Packages": [
+            {"Name": "com.example:" + module, "Version": "1", "FilePath": "app/app.jar"},
+            {"Name": "org.springframework.boot:spring-boot", "Version": "3.5.16",
+             "FilePath": "app/app.jar/BOOT-INF/lib/spring-boot-3.5.16.jar"}]})
+    return results
+
+
 def exception(stage, package=None, target=None, expires="2026-10-01"):
     item = {
         "stage": stage,
@@ -44,6 +56,33 @@ def exception(stage, package=None, target=None, expires="2026-10-01"):
 
 
 class TrivyPolicyTests(unittest.TestCase):
+    def test_java_image_requires_os_and_application_inventory(self):
+        report = {"Results": image_inventory("api-gateway-server")}
+        evaluate(report, "image", "api-gateway-server", [])
+        for broken in (report["Results"][:1], report["Results"][1:]):
+            with self.subTest(broken=broken), self.assertRaisesRegex(ValueError, "inventory"):
+                evaluate({"Results": broken}, "image", "api-gateway-server", [])
+        for mutation in ("empty", "missing-version", "wrong-path", "wrong-module"):
+            broken = copy.deepcopy(report)
+            packages = broken["Results"][1]["Packages"]
+            if mutation == "empty":
+                packages.clear()
+            elif mutation == "missing-version":
+                packages[1].pop("Version")
+            elif mutation == "wrong-path":
+                packages[1]["FilePath"] = "opt/jdk/lib/spring-boot.jar"
+            else:
+                packages[0]["Name"] = "com.example:unrelated"
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "Java package inventory"):
+                evaluate(broken, "image", "api-gateway-server", [])
+
+    def test_frontend_requires_os_inventory_but_not_java(self):
+        report = {"Results": image_inventory("blog-client")}
+        evaluate(report, "image", "blog-client", [])
+        report["Results"][0]["Packages"] = []
+        with self.assertRaisesRegex(ValueError, "OS package inventory"):
+            evaluate(report, "image", "blog-client", [])
+
     def test_fixed_high_is_blocked_and_unfixed_is_report_only(self):
         fixed = {"VulnerabilityID": "CVE-EXAMPLE", "PkgName": "example-lib", "Severity": "HIGH", "Status": "fixed", "FixedVersion": "2.0"}
         findings, _, _ = evaluate(source_report(fixed), "source", None, [])

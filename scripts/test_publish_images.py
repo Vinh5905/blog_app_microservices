@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from publish_images import publish, write_json
 from trivy_policy import EXPECTED_CONFIG, EXPECTED_SOURCE, MODULES
+from test_trivy_policy import image_inventory
 
 
 class ReleaseTests(unittest.TestCase):
@@ -31,7 +32,7 @@ class ReleaseTests(unittest.TestCase):
             (self.images / f"{module}.image-id").write_text(self.image_id)
             write_json(self.images / f"{module}.json", {"ArtifactType": "container_image",
                        "ArtifactName": f"blogapp-ci/{module}:{self.sha}", "Metadata": {"ImageID": self.image_id},
-                       "Results": [{"Target": "alpine", "Vulnerabilities": []}]})
+                       "Results": image_inventory(module)})
             write_json(self.images / f"{module}.cdx.json", {"bomFormat": "CycloneDX", "components": [{"name": "example"}]})
         self.calls = []
 
@@ -74,6 +75,15 @@ class ReleaseTests(unittest.TestCase):
                                                     "Severity": "CRITICAL", "FixedVersion": "2"}]
         write_json(path, report)
         with patch("publish_images.command", side_effect=self.run_command), self.assertRaisesRegex(ValueError, "image gate"):
+            self.execute()
+        self.assert_no_push()
+
+    def test_missing_java_inventory_blocks_all_pushes(self):
+        path = self.images / "api-gateway-server.json"
+        report = json.loads(path.read_text())
+        report["Results"] = report["Results"][:1]
+        write_json(path, report)
+        with patch("publish_images.command", side_effect=self.run_command), self.assertRaisesRegex(ValueError, "Java package inventory"):
             self.execute()
         self.assert_no_push()
 

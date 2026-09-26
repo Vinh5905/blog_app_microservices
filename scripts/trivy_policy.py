@@ -89,6 +89,8 @@ def evaluate(report, stage, image_module, exceptions):
         raise ValueError("Trivy omitted required targets: " + ", ".join(sorted(missing)))
     if stage == "image" and (not image_module or not targets):
         raise ValueError("image report has no scanned targets or module")
+    if stage == "image":
+        validate_image_inventory(report, image_module)
 
     applicable = [
         entry for entry in exceptions
@@ -125,6 +127,27 @@ def evaluate(report, stage, image_module, exceptions):
         raise ValueError("exceptions no longer match findings: " +
                          ", ".join(f"{entry['module']}:{entry['id']}" for entry in stale))
     return findings, suppressed, targets
+
+
+def validate_image_inventory(report, module):
+    """An OS-only scan is insufficient for a Spring Boot runtime image."""
+    def packages(kind, package_type=None):
+        return [p for result in report["Results"]
+                if result.get("Class") == kind and (package_type is None or result.get("Type") == package_type)
+                for p in (result.get("Packages") or [])
+                if isinstance(p, dict) and p.get("Name") and p.get("Version")]
+
+    if not packages("os-pkgs"):
+        raise ValueError("image report is missing OS package inventory")
+    if module == "blog-client":
+        return
+    java = packages("lang-pkgs", "jar")
+    app = any(p["Name"].endswith(":" + module) and
+              p.get("FilePath", "").lstrip("/") == "app/app.jar" for p in java)
+    boot = any(p["Name"] == "org.springframework.boot:spring-boot" and
+               p.get("FilePath", "").lstrip("/").startswith("app/app.jar/BOOT-INF/lib/") for p in java)
+    if not app or not boot:
+        raise ValueError("image report is missing application Java package inventory")
 
 
 def validate_image_identity(report, expected_ref, expected_id):

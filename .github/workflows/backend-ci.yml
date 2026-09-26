@@ -40,6 +40,8 @@ jobs:
     needs: backend-test-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      evidence-id: ${{ steps.upload-source.outputs.artifact-id }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,7 +49,9 @@ jobs:
           persist-credentials: false
 
       - name: Test Trivy policy
-        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+        run: |
+          python3 scripts/trivy_inputs.py
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
 
       - name: Install pinned Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
@@ -87,12 +91,12 @@ jobs:
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
         run: |
-          trivy fs --config security/trivy/trivy.yaml --scanners vuln --include-dev-deps --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
+          trivy fs --config security/trivy/trivy.yaml --ignorefile /dev/null --scanners vuln --include-dev-deps --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
 
       - name: Scan Dockerfiles and infrastructure configuration
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
-        run: trivy config --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
+        run: trivy config --config security/trivy/trivy.yaml --ignorefile /dev/null --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
 
       - name: Record databases used by scans
         env:
@@ -116,6 +120,7 @@ jobs:
           exit "$status"
 
       - name: Upload Trivy source evidence
+        id: upload-source
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -287,6 +292,9 @@ jobs:
     needs: [backend-test-gate, frontend-test-gate, trivy-source]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    outputs:
+      evidence-id: ${{ steps.upload-images.outputs.artifact-id }}
+      candidates-id: ${{ steps.upload-candidates.outputs.artifact-id }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -314,6 +322,7 @@ jobs:
         run: bash scripts/build-scan-images.sh
 
       - name: Preserve the scanned images for this main run only
+        id: upload-candidates
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -324,6 +333,7 @@ jobs:
           retention-days: 1
 
       - name: Upload Trivy image evidence
+        id: upload-images
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -346,17 +356,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Require explicit artifact IDs from successful producing jobs
+        env:
+          SOURCE_EVIDENCE_ID: ${{ needs.trivy-source.outputs.evidence-id }}
+          IMAGE_EVIDENCE_ID: ${{ needs.trivy-images.outputs.evidence-id }}
+          IMAGE_CANDIDATES_ID: ${{ needs.trivy-images.outputs.candidates-id }}
+        run: python3 scripts/release_artifacts.py
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: release-images-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.trivy-images.outputs.candidates-id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/candidates
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: trivy-images-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.trivy-images.outputs.evidence-id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/trivy-images
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: trivy-source-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.trivy-source.outputs.evidence-id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/trivy-source
       - name: Install pinned Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2

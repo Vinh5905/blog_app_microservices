@@ -2,6 +2,36 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-26 — Fix Trivy suppression, inventory and artifact retry gaps
+
+- Changed: added a preflight rejecting native ignore files and inline Trivy/tfsec suppressions; all scans explicitly select the scanner config and an empty ignorefile. Image policy requires OS package inventory and, for Java services, the matching application JAR plus nested Spring Boot inventory. Publish consumes producer artifact IDs through job outputs and rejects absent/invalid IDs before download, so a consumer retry does not invent artifact names for a new attempt.
+- Verified: 25 Python regression tests passed, including ignore bypasses, missing Java inventory blocking all pushes, and producer IDs surviving a consumer attempt change. `bash scripts/verify.sh` passed four independent Maven clean verifies/coverage gates, two frontend tests and build. Actionlint, shell syntax and `git diff --check` passed. Real Trivy config scan with explicit config/empty ignorefile passed on all five Dockerfiles; all five previously downloaded CI image reports passed the stronger inventory checks, while the original bypass fixture was rejected.
+- Pending: new PR CI and a real isolated GitHub artifact retry regression; results will be attached to PR #3. Owner ruleset activation and first trusted main GHCR/Cosign release remain external acceptance steps.
+
+## 2026-09-26 — Reject missing latest release evidence during scheduled scans
+
+- Changed: daily rescan only selects the newest successful main run; missing or expired evidence fails instead of falling back to an older published candidate.
+- Verified: `python -m unittest discover -s scripts -p 'test_*.py' -v` passed 17 tests, including the missing-manifest regression. Initial GitHub run 36232554559 passed frontend, all four backend builds and all four Sonar analyses before being superseded by the rescan fix. Final GitHub run results and artifacts are tracked on [PR #3](https://github.com/Vinh5905/blog_app_microservices/pull/3).
+- Pending: final PR source/image gate run, owner ruleset activation, first trusted main publication and scheduled-rescan execution.
+
+## 2026-09-26 — Remediate dependencies and enforce Trivy release gates
+
+- Changed: upgraded four independent Java modules to Boot 3.5.16/Cloud 2025.0.3 with Netty/Tomcat/BouncyCastle fixes and the new gateway route namespace; replaced CRA with Vite/Vitest and two login tests; pinned container bases and patched frontend libexpat. Source scans include dev dependencies. CI adds frontend and enforcing five-image gates on PRs, main-only GHCR digest publishing with Cosign signatures/SBOM/provenance verification, completion manifests, and daily published-digest rescans. Added architecture decision and owner handoff; no security exceptions were added.
+- Verified: `bash scripts/verify.sh` with JDK 17 passed all four Maven clean verifies, JaCoCo checks, two frontend tests and Vite build. `docker compose --project-name blogapp-trivy-hardening --env-file <temporary-env> up --build -d` produced six healthy containers; `bash scripts/smoke-test.sh` passed same-origin API, malformed JWT and ownership checks, including after the libexpat rebuild. Trivy 0.74.0 source scan with `--include-dev-deps`, config scan and five exact-image-ID scans passed enforce policy: 0 fixable HIGH/CRITICAL source/image findings, 0 HIGH/CRITICAL config findings, 0 suppressed; five CycloneDX SBOMs generated. `python -m unittest discover -s scripts -p 'test_*.py' -v` passed 16 policy/release/rescan tests; actionlint and `bash -n scripts/build-scan-images.sh` passed.
+- Pending: actual GitHub PR verification; owner activation and negative acceptance of required Trivy/frontend checks (current account has push but no admin); first trusted main GHCR/Cosign release and scheduled-rescan run. Mocked publication tests are not registry/signature execution evidence. GitOps/CD and other security tools remain separate architecture milestones.
+
+## 2026-09-25 — Prepare Maven cache for Trivy on GitHub
+
+- Changed: source scanning waits for the backend gate, restores the gateway Maven cache, resolves all four modules before scanning, and records scanner/source metadata before dependency resolution. Missing Maven metadata uses Google's public Maven Central mirror through scanner-specific configuration; merged main's Sonar integration into the Trivy branch.
+- Verified: `./mvnw -B -ntp dependency:go-offline -DskipTests` passed for all four modules with JDK 17; `bash scripts/verify.sh` passed on the merged branch after starting Docker. GitHub run [36143792724](https://github.com/Vinh5905/blog_app_microservices/actions/runs/36143792724) passed backend/Sonar gates, both Trivy scans, Compose validation and artifact upload; source policy correctly failed on 244 fixable HIGH/CRITICAL findings, config had 0. The mirror resolved the HTTP 429 failures seen in prior runs. Added six policy regression tests and post-scan database metadata recording to CI; local tests and actionlint passed.
+- Verified: final code commit 471a852 passed backend/Sonar and Trivy execution/policy tests in PR run 36144756912; its source gate correctly failed on 244 findings. Manual run 36144854263 passed the Trivy image baseline job; downloaded artifacts contained five matching image IDs, five CycloneDX SBOMs and 186 findings. The overall manual run is not green: source policy fails, and the inherited Sonar condition skips analysis on a non-main manual run while its aggregate gate fails.
+- Pending: remediate 244 source findings and 186 image findings; complete release/ruleset acceptance criteria.
+
+## 2026-09-25 — Added Trivy source and image baseline CI
+
+- Changed: added pinned Trivy source/config PR checks, a five-image post-merge audit and CycloneDX artifacts, a fail-closed exception policy with tests, explicit non-root frontend Docker user, LF checkout rules, and `docs/TRIVY-PRODUCTION-CI.md`.
+- Verified: `bash scripts/verify.sh` with JDK 17 passed four independent Maven verifies plus frontend test/build; `docker compose --project-name blogapp-trivy-verify --env-file <temporary-env> up --build -d` made all six containers healthy, and `bash scripts/smoke-test.sh` passed. Local Trivy v0.74.0 scanned five source manifests (244 fixable HIGH/CRITICAL), five Dockerfiles (0 HIGH/CRITICAL), and five built image IDs (186 fixable HIGH/CRITICAL); five CycloneDX SBOMs were generated. Six policy unit tests, `actionlint` on backend CI, and `docker compose config --quiet` passed. The source enforce policy correctly failed on the measured debt.
+- Pending: remediate source/image findings, verify actual GitHub Actions runs and exception expiry behavior on PRs, then enable required checks and implement the digest-based GHCR release gate. SonarQube Cloud remains unconfigured.
 ## 2026-09-25 — Prepared Sonar integration branch with documented tests
 
 - Changed: added purpose-and-risk comments to 31 Java test methods across the four services; carried the validated Sonar CI configuration into a separate integration branch.

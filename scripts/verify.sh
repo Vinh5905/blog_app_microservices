@@ -12,4 +12,4 @@ for service in api-gateway-server userauthservice postservice commentservice; do
 done
 
 echo "==> Verifying blog-client"
-(cd "${ROOT_DIR}/blog-client" && npm ci && CI=true npm test -- --watchAll=false --watchman=false --passWithNoTests && npm run build)
+(cd "${ROOT_DIR}/blog-client" && npm ci && CI=true npm test && npm run build)

@@ -15,6 +15,120 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  frontend-test-gate:
+    name: Frontend test gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: blog-client/package-lock.json
+      - name: Test and build frontend
+        working-directory: blog-client
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  trivy-source:
+    name: Trivy source gate
+    needs: backend-test-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      evidence-id: ${{ steps.upload-source.outputs.artifact-id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test Trivy policy
+        run: |
+          python3 scripts/trivy_inputs.py
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
+
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: false
+
+      - name: Record scanner and source versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-source"
+          trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/trivy-source/source-sha.txt"
+
+      - name: Set up Temurin JDK 17 with Maven cache
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: api-gateway-server/pom.xml
+
+      - name: Resolve Maven dependencies before Trivy scan
+        run: |
+          for module in api-gateway-server userauthservice postservice commentservice; do
+            (cd "$module" && ./mvnw -B -ntp dependency:go-offline -DskipTests)
+          done
+
+      - name: Restore vulnerability database cache
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-${{ github.ref }}-
+
+      - name: Scan source dependencies
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: |
+          trivy fs --config security/trivy/trivy.yaml --ignorefile /dev/null --scanners vuln --include-dev-deps --list-all-pkgs --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/source.json" .
+
+      - name: Scan Dockerfiles and infrastructure configuration
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: trivy config --config security/trivy/trivy.yaml --ignorefile /dev/null --skip-dirs '**/target' --skip-dirs '**/node_modules' --skip-dirs '.cache' --timeout 20m --format json --output "$RUNNER_TEMP/trivy-source/config.json" .
+
+      - name: Record databases used by scans
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: trivy version --format json > "$RUNNER_TEMP/trivy-source/trivy-version.json"
+
+      - name: Validate Compose syntax
+        env:
+          JWT_SECRET: ci-placeholder
+          MYSQL_ROOT_PASSWORD: ci-placeholder
+          USER_DB_PASSWORD: ci-placeholder
+          POST_DB_PASSWORD: ci-placeholder
+          COMMENT_DB_PASSWORD: ci-placeholder
+        run: docker compose config --quiet
+
+      - name: Enforce Trivy policy
+        run: |
+          status=0
+          python3 scripts/trivy_policy.py --stage config --mode enforce --report "$RUNNER_TEMP/trivy-source/config.json" --summary "$RUNNER_TEMP/trivy-source/config-summary.json" || status=1
+          python3 scripts/trivy_policy.py --stage source --mode enforce --report "$RUNNER_TEMP/trivy-source/source.json" --summary "$RUNNER_TEMP/trivy-source/source-summary.json" || status=1
+          exit "$status"
+
+      - name: Upload Trivy source evidence
+        id: upload-source
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trivy-source/
+          if-no-files-found: error
+          retention-days: 14
+
   verify:
     name: Verify ${{ matrix.module }}
     runs-on: ubuntu-24.04
@@ -153,7 +267,7 @@ jobs:
 
   sonar-quality-gate:
     name: Sonar quality gate
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     needs: sonar
     runs-on: ubuntu-24.04
     steps:
@@ -172,3 +286,120 @@ jobs:
         env:
           VERIFY_RESULT: ${{ needs.verify.result }}
         run: test "$VERIFY_RESULT" = success
+
+  trivy-images:
+    name: Trivy image gate
+    needs: [backend-test-gate, frontend-test-gate, trivy-source]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    outputs:
+      evidence-id: ${{ steps.upload-images.outputs.artifact-id }}
+      candidates-id: ${{ steps.upload-candidates.outputs.artifact-id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: false
+
+      - name: Restore vulnerability database cache
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-image-db-${{ runner.os }}-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-image-db-${{ runner.os }}-${{ github.ref }}-
+
+      - name: Build and inspect the five release image candidates
+        shell: bash
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: bash scripts/build-scan-images.sh
+
+      - name: Preserve the scanned images for this main run only
+        id: upload-candidates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-images.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Trivy image evidence
+        id: upload-images
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trivy-images/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-images:
+    name: Publish verified images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend-test-gate, frontend-test-gate, sonar-quality-gate, trivy-source, trivy-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require explicit artifact IDs from successful producing jobs
+        env:
+          SOURCE_EVIDENCE_ID: ${{ needs.trivy-source.outputs.evidence-id }}
+          IMAGE_EVIDENCE_ID: ${{ needs.trivy-images.outputs.evidence-id }}
+          IMAGE_CANDIDATES_ID: ${{ needs.trivy-images.outputs.candidates-id }}
+        run: python3 scripts/release_artifacts.py
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ needs.trivy-images.outputs.candidates-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/candidates
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ needs.trivy-images.outputs.evidence-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/trivy-images
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ needs.trivy-source.outputs.evidence-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/trivy-source
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Load the exact scanned images
+        run: docker image load --input "$RUNNER_TEMP/candidates/release-images.tar"
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Recheck gates, push digests, sign and verify all five images
+        run: >-
+          python3 scripts/publish_images.py
+          --images "$RUNNER_TEMP/trivy-images"
+          --source "$RUNNER_TEMP/trivy-source"
+          --output "$RUNNER_TEMP/release"
+      - name: Upload completed CI release manifest and verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Sign out of GHCR
+        if: always()
+        run: docker logout ghcr.io

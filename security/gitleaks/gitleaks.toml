@@ -1,0 +1,6 @@
+title = "BlogApp Gitleaks policy"
+
+# Keep the complete ruleset embedded in the pinned Gitleaks binary. This file
+# intentionally defines no disabled rules, allowlists, or project exceptions.
+[extend]
+useDefault = true

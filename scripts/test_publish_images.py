@@ -17,15 +17,31 @@ class ReleaseTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
-        self.images, self.source, self.output = [root / p for p in ("images", "source", "release")]
+        self.images, self.source, self.gitleaks, self.output = [root / p for p in ("images", "source", "gitleaks", "release")]
         self.images.mkdir()
         self.source.mkdir()
+        self.gitleaks.mkdir()
         self.sha = "a" * 40
         self.image_id, self.digest = "sha256:" + "b" * 64, "sha256:" + "c" * 64
         self.env = {"GITHUB_SHA": self.sha, "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "push",
                     "GITHUB_REPOSITORY": "owner/repo", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1"}
         for directory in (self.source, self.images):
             (directory / "source-sha.txt").write_text(self.sha)
+        (self.gitleaks / "source-sha.txt").write_text(self.sha)
+        (self.gitleaks / "scanner-version.txt").write_text("8.30.1\n")
+        write_json(self.gitleaks / "history.json", [])
+        write_json(self.gitleaks / "current-tree.json", [])
+        write_json(self.gitleaks / "summary.json", {
+            "schema_version": 1,
+            "source_sha": self.sha,
+            "scanner_version": "8.30.1",
+            "status": "pass",
+            "total_findings": 0,
+            "scans": {
+                "history": {"exit_code": 0, "findings": 0, "scanner_error": False},
+                "current-tree": {"exit_code": 0, "findings": 0, "scanner_error": False},
+            },
+        })
         for stage, targets in (("source", EXPECTED_SOURCE), ("config", EXPECTED_CONFIG)):
             write_json(self.source / f"{stage}.json", {"Results": [{"Target": t} for t in targets]})
         for module in MODULES:
@@ -45,7 +61,7 @@ class ReleaseTests(unittest.TestCase):
         return "{}"
 
     def execute(self):
-        return publish(self.images, self.source, self.output, self.env)
+        return publish(self.images, self.source, self.gitleaks, self.output, self.env)
 
     def assert_no_manifest(self):
         self.assertFalse((self.output / "release-manifest.json").exists())
@@ -75,6 +91,24 @@ class ReleaseTests(unittest.TestCase):
                                                     "Severity": "CRITICAL", "FixedVersion": "2"}]
         write_json(path, report)
         with patch("publish_images.command", side_effect=self.run_command), self.assertRaisesRegex(ValueError, "image gate"):
+            self.execute()
+        self.assert_no_push()
+
+    def test_failed_or_mismatched_gitleaks_evidence_blocks_all_pushes(self):
+        summary_path = self.gitleaks / "summary.json"
+        summary = json.loads(summary_path.read_text())
+        summary["status"] = "fail"
+        summary["total_findings"] = 1
+        write_json(summary_path, summary)
+        with patch("publish_images.command", side_effect=self.run_command), self.assertRaisesRegex(ValueError, "Gitleaks gate"):
+            self.execute()
+        self.assert_no_push()
+
+        summary["status"] = "pass"
+        summary["total_findings"] = 0
+        write_json(summary_path, summary)
+        (self.gitleaks / "source-sha.txt").write_text("d" * 40)
+        with patch("publish_images.command", side_effect=self.run_command), self.assertRaisesRegex(ValueError, "another source"):
             self.execute()
         self.assert_no_push()
 
@@ -134,6 +168,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len([c for c in self.calls if c[:2] == ("docker", "push")]), 5)
         self.assertEqual(len([c for c in self.calls if c[0] == "cosign" and c[1].startswith("verify")]), 15)
         self.assertTrue(all(v["image"].endswith("@" + self.digest) for v in manifest["images"].values()))
+        self.assertEqual(manifest["gitleaks"]["status"], "pass")
+        self.assertTrue((self.output / "gitleaks-summary.json").is_file())
         self.assertTrue((self.output / "release-manifest.json").is_file())
 
 

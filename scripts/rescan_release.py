@@ -15,11 +15,15 @@ from trivy_inputs import validate_scan_inputs
 
 def validate_manifest(manifest, repository, sha):
     identity = f"https://github.com/{repository}/.github/workflows/backend-ci.yml@refs/heads/main"
+    gitleaks = manifest.get("gitleaks", {})
     if (manifest.get("kind") != "ci-release-candidate" or manifest.get("schema_version") != 1
             or manifest.get("repository") != repository or manifest.get("source_sha") != sha
             or not re.fullmatch(r"[0-9a-f]{40}", sha)
             or manifest.get("identity") != identity
             or manifest.get("issuer") != "https://token.actions.githubusercontent.com"
+            or gitleaks.get("status") != "pass"
+            or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", gitleaks.get("scanner_version", ""))
+            or not re.fullmatch(r"[0-9a-f]{64}", gitleaks.get("summary_sha256", ""))
             or set(manifest.get("images", {})) != set(MODULES)):
         raise ValueError("release manifest does not match the trusted main run")
     for module, image in manifest["images"].items():

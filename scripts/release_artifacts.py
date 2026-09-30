@@ -4,7 +4,7 @@
 import os
 import re
 
-ARTIFACT_KEYS = ("SOURCE_EVIDENCE_ID", "IMAGE_EVIDENCE_ID", "IMAGE_CANDIDATES_ID")
+ARTIFACT_KEYS = ("GITLEAKS_EVIDENCE_ID", "SOURCE_EVIDENCE_ID", "IMAGE_EVIDENCE_ID", "IMAGE_CANDIDATES_ID")
 
 
 def require_artifact_ids(env):
@@ -12,7 +12,7 @@ def require_artifact_ids(env):
     if any(not re.fullmatch(r"[1-9][0-9]*", value) for value in ids):
         raise ValueError("missing/invalid producer artifact ID; rerun the producing jobs if evidence expired")
     if len(set(ids)) != len(ids):
-        raise ValueError("source evidence, image evidence and candidates must be distinct artifacts")
+        raise ValueError("Gitleaks, source, image and candidate evidence must be distinct artifacts")
     return dict(zip(ARTIFACT_KEYS, ids))
 
 

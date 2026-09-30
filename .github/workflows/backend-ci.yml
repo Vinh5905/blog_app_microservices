@@ -15,6 +15,105 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  gitleaks:
+    name: Gitleaks secret gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_LINUX_X64_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    outputs:
+      evidence-id: ${{ steps.upload-gitleaks.outputs.artifact-id }}
+    steps:
+      - name: Check out complete repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize secret scan evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/gitleaks-evidence"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/gitleaks-evidence/source-sha.txt"
+
+      - name: Test and validate secret scanning policy
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_gitleaks_policy.py' -v
+          python3 scripts/gitleaks_policy.py preflight \
+            --root . \
+            --config security/gitleaks/gitleaks.toml
+
+      - name: Install checksum-verified Gitleaks
+        env:
+          ARCHIVE_URL: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+        run: |
+          mkdir -p "$RUNNER_TEMP/gitleaks-bin"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$RUNNER_TEMP/gitleaks.tar.gz" "$ARCHIVE_URL"
+          printf '%s  %s\n' "$GITLEAKS_LINUX_X64_SHA256" "$RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP/gitleaks-bin" gitleaks
+          printf '%s\n' "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+
+      - name: Prepare current tracked tree
+        run: |
+          test "$(gitleaks version)" = "$GITLEAKS_VERSION"
+          gitleaks version > "$RUNNER_TEMP/gitleaks-evidence/scanner-version.txt"
+          mkdir -p "$RUNNER_TEMP/gitleaks-current"
+          : > "$RUNNER_TEMP/gitleaks-empty-ignore"
+          git archive --format=tar --output="$RUNNER_TEMP/gitleaks-current.tar" HEAD
+          tar -xf "$RUNNER_TEMP/gitleaks-current.tar" -C "$RUNNER_TEMP/gitleaks-current"
+
+      - name: Scan full history and current tracked files
+        shell: bash
+        run: |
+          set +e
+          gitleaks git \
+            --config security/gitleaks/gitleaks.toml \
+            --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-empty-ignore" \
+            --ignore-gitleaks-allow \
+            --log-opts='--all' \
+            --max-archive-depth=2 \
+            --max-decode-depth=5 \
+            --timeout=300 \
+            --redact=100 \
+            --no-banner \
+            --no-color \
+            --report-format=json \
+            --report-path="$RUNNER_TEMP/gitleaks-evidence/history.json" \
+            .
+          history_exit=$?
+          gitleaks dir \
+            --config "$GITHUB_WORKSPACE/security/gitleaks/gitleaks.toml" \
+            --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-empty-ignore" \
+            --ignore-gitleaks-allow \
+            --max-archive-depth=2 \
+            --max-decode-depth=5 \
+            --timeout=300 \
+            --redact=100 \
+            --no-banner \
+            --no-color \
+            --report-format=json \
+            --report-path="$RUNNER_TEMP/gitleaks-evidence/current-tree.json" \
+            "$RUNNER_TEMP/gitleaks-current"
+          current_exit=$?
+          set -e
+          python3 scripts/gitleaks_policy.py summarize \
+            --scan history "$history_exit" "$RUNNER_TEMP/gitleaks-evidence/history.json" \
+            --scan current-tree "$current_exit" "$RUNNER_TEMP/gitleaks-evidence/current-tree.json" \
+            --source-sha "$GITHUB_SHA" \
+            --scanner-version "$GITLEAKS_VERSION" \
+            --output "$RUNNER_TEMP/gitleaks-evidence/summary.json"
+
+      - name: Upload redacted Gitleaks evidence
+        id: upload-gitleaks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gitleaks-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
   frontend-test-gate:
     name: Frontend test gate
     runs-on: ubuntu-24.04
@@ -345,7 +444,7 @@ jobs:
   publish-images:
     name: Publish verified images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend-test-gate, frontend-test-gate, sonar-quality-gate, trivy-source, trivy-images]
+    needs: [gitleaks, backend-test-gate, frontend-test-gate, sonar-quality-gate, trivy-source, trivy-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -358,10 +457,16 @@ jobs:
           persist-credentials: false
       - name: Require explicit artifact IDs from successful producing jobs
         env:
+          GITLEAKS_EVIDENCE_ID: ${{ needs.gitleaks.outputs.evidence-id }}
           SOURCE_EVIDENCE_ID: ${{ needs.trivy-source.outputs.evidence-id }}
           IMAGE_EVIDENCE_ID: ${{ needs.trivy-images.outputs.evidence-id }}
           IMAGE_CANDIDATES_ID: ${{ needs.trivy-images.outputs.candidates-id }}
         run: python3 scripts/release_artifacts.py
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ needs.gitleaks.outputs.evidence-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/gitleaks
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ needs.trivy-images.outputs.candidates-id }}
@@ -390,6 +495,7 @@ jobs:
       - name: Recheck gates, push digests, sign and verify all five images
         run: >-
           python3 scripts/publish_images.py
+          --gitleaks "$RUNNER_TEMP/gitleaks"
           --images "$RUNNER_TEMP/trivy-images"
           --source "$RUNNER_TEMP/trivy-source"
           --output "$RUNNER_TEMP/release"

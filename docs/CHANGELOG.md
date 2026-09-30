@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-30 — Add production Gitleaks gate
+
+- Changed: added the checksum-pinned `Gitleaks secret gate` for full reachable Git history and the current tracked tree, fail-closed policy/report validation, redacted 14-day evidence, and source-SHA-bound release verification before GHCR publication. Added policy/release regressions and the production runbook; no suppression or baseline exception was introduced.
+- Verified: Gitleaks 8.30.1 scanned the 17-commit reachable history and proposed tracked tree with 0 findings; a temporary fake AWS credential was blocked with one fully redacted finding. `python3 -m unittest discover -s scripts -p 'test_*.py' -v` passed 32 tests; actionlint 1.7.12 and `git diff --check` passed. `bash scripts/verify.sh` passed four independent Maven clean verifies including Testcontainers/coverage, two frontend tests and the Vite production build.
+- Pending: push PR CI, clean/intentional-finding remote acceptance runs, and owner addition of `Gitleaks secret gate` to the active `main` ruleset.
+
 ## 2026-09-26 — Fix Trivy suppression, inventory and artifact retry gaps
 
 - Changed: added a preflight rejecting native ignore files and inline Trivy/tfsec suppressions; all scans explicitly select the scanner config and an empty ignorefile. Image policy requires OS package inventory and, for Java services, the matching application JAR plus nested Spring Boot inventory. Publish consumes producer artifact IDs through job outputs and rejects absent/invalid IDs before download, so a consumer retry does not invent artifact names for a new attempt.

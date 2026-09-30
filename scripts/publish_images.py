@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 
 from trivy_policy import MODULES, evaluate, read_json, validate_exceptions, validate_image_identity
@@ -28,7 +29,31 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def preflight(evidence, source, env):
+def validate_gitleaks_evidence(gitleaks, sha):
+    if (gitleaks / "source-sha.txt").read_text(encoding="utf-8").strip() != sha:
+        raise ValueError("Gitleaks evidence belongs to another source SHA")
+    summary = read_json(gitleaks / "summary.json")
+    if (
+        summary.get("schema_version") != 1
+        or summary.get("source_sha") != sha
+        or summary.get("status") != "pass"
+        or summary.get("total_findings") != 0
+        or set(summary.get("scans", {})) != {"history", "current-tree"}
+    ):
+        raise ValueError("Gitleaks gate did not pass")
+    if any(scan.get("exit_code") != 0 or scan.get("findings") != 0 or scan.get("scanner_error") is not False
+           for scan in summary["scans"].values()):
+        raise ValueError("Gitleaks scan evidence is incomplete")
+    version = (gitleaks / "scanner-version.txt").read_text(encoding="utf-8").strip()
+    if version != summary.get("scanner_version") or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise ValueError("invalid Gitleaks scanner version evidence")
+    for name in ("history.json", "current-tree.json"):
+        if read_json(gitleaks / name) != []:
+            raise ValueError("Gitleaks report contains findings")
+    return summary
+
+
+def preflight(evidence, source, gitleaks, env):
     """Validate every input before permitting the first registry mutation."""
     if env.get("GITHUB_EVENT_NAME") != "push" or env.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("publishing requires a push to main")
@@ -44,6 +69,7 @@ def preflight(evidence, source, env):
     for directory in (evidence, source):
         if (directory / "source-sha.txt").read_text().strip() != sha:
             raise ValueError("evidence belongs to another source SHA")
+    gitleaks_summary = validate_gitleaks_evidence(gitleaks, sha)
     exceptions = validate_exceptions(read_json("security/trivy/exceptions.json"), dt.datetime.now(dt.timezone.utc).date())
     for stage in ("source", "config"):
         findings, _, _ = evaluate(read_json(source / f"{stage}.json"), stage, None, exceptions)
@@ -66,15 +92,17 @@ def preflight(evidence, source, env):
         if command("docker", "image", "inspect", "--format={{.Id}}", ref) != image_id:
             raise ValueError(f"loaded image differs from scanned image: {module}")
         images[module] = {"local_ref": ref, "image_id": image_id}
-    return images
+    return images, gitleaks_summary
 
 
-def publish(evidence, source, output, env):
+def publish(evidence, source, gitleaks, output, env):
     manifest_path = output / "release-manifest.json"
     if manifest_path.exists():
         raise ValueError("output already contains a release manifest")
-    images = preflight(evidence, source, env)
+    images, gitleaks_summary = preflight(evidence, source, gitleaks, env)
     output.mkdir(parents=True, exist_ok=True)
+    gitleaks_output = output / "gitleaks-summary.json"
+    shutil.copyfile(gitleaks / "summary.json", gitleaks_output)
     sha, repo = env["GITHUB_SHA"], env["GITHUB_REPOSITORY"]
     run_url = f"https://github.com/{repo}/actions/runs/{env['GITHUB_RUN_ID']}/attempts/{env['GITHUB_RUN_ATTEMPT']}"
     identity = f"https://github.com/{repo}/.github/workflows/backend-ci.yml@refs/heads/main"
@@ -122,6 +150,9 @@ def publish(evidence, source, output, env):
     # Atomic completion marker. Partial registry pushes never constitute a release.
     manifest = {"schema_version": 1, "kind": "ci-release-candidate", "source_sha": sha,
                 "repository": repo, "run_url": run_url, "issuer": issuer, "identity": identity,
+                "gitleaks": {"status": gitleaks_summary["status"],
+                              "scanner_version": gitleaks_summary["scanner_version"],
+                              "summary_sha256": hashlib.sha256(gitleaks_output.read_bytes()).hexdigest()},
                 "images": entries}
     pending = output / "release-manifest.pending"
     write_json(pending, manifest)
@@ -133,6 +164,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--images", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--gitleaks", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    publish(args.images, args.source, args.output, os.environ)
+    publish(args.images, args.source, args.gitleaks, args.output, os.environ)

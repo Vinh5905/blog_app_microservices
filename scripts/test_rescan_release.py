@@ -18,6 +18,7 @@ class RescanManifestTests(unittest.TestCase):
             "kind": "ci-release-candidate", "schema_version": 1, "source_sha": self.sha,
             "repository": "owner/repo", "issuer": "https://token.actions.githubusercontent.com",
             "identity": "https://github.com/owner/repo/.github/workflows/backend-ci.yml@refs/heads/main",
+            "gitleaks": {"status": "pass", "scanner_version": "8.30.1", "summary_sha256": "d" * 64},
             "images": {m: {"image": f"ghcr.io/owner/repo/{m}@sha256:" + "b" * 64,
                            "image_id": "sha256:" + "c" * 64, "platform": "linux/amd64"} for m in MODULES},
         }
@@ -37,7 +38,7 @@ class RescanManifestTests(unittest.TestCase):
             self.assertIn("per_page=1", run.call_args_list[0].args[-1])
 
     def test_missing_module_mutable_tag_wrong_owner_and_sha_are_rejected(self):
-        for mutation in ("missing", "tag", "owner", "sha", "identity"):
+        for mutation in ("missing", "tag", "owner", "sha", "identity", "gitleaks"):
             manifest = copy.deepcopy(self.manifest)
             with self.subTest(mutation=mutation):
                 if mutation == "missing":
@@ -48,8 +49,10 @@ class RescanManifestTests(unittest.TestCase):
                     manifest["images"][MODULES[0]]["image"] = f"ghcr.io/attacker/repo/{MODULES[0]}@sha256:" + "b" * 64
                 elif mutation == "sha":
                     manifest["source_sha"] = "d" * 40
-                else:
+                elif mutation == "identity":
                     manifest["identity"] = manifest["identity"].replace("main", "feature")
+                else:
+                    manifest["gitleaks"]["status"] = "fail"
                 with self.assertRaises(ValueError):
                     validate_manifest(manifest, "owner/repo", self.sha)
 

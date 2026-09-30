@@ -51,7 +51,7 @@ Quyền tài khoản hiện tại là push/triage, không có admin/maintain. Sa
 
 Owner review/merge PR rồi kiểm tra `Publish verified images` trên đúng main SHA: năm GHCR digest, 15 kết quả verify và artifact manifest đủ năm module. Repo phải được quyền ghi GHCR packages; nếu package đã tồn tại, cấp GitHub Actions access cho repo trong package settings. Không cần tạo PAT hoặc private signing key. Sau lần phát hành đầu, chạy `Trivy published image rescan` từ main và đối chiếu digest với manifest. Các bước chưa có run thực tế không được đánh dấu nghiệm thu xong.
 
-Phạm vi này chưa bổ sung Gitleaks, frontend lint/coverage gate, SARIF, GitOps/CD hay admission policy. Những việc đó thuộc các hạng mục khác của kiến trúc, không được tính là đã hoàn thiện chỉ nhờ Trivy xanh.
+Gitleaks được triển khai sau đó dưới gate và runbook riêng tại [GITLEAKS-PRODUCTION-CI.md](GITLEAKS-PRODUCTION-CI.md); Trivy xanh vẫn không thay thế secret scan. Frontend lint/coverage gate, SARIF, GitOps/CD và admission policy thuộc các hạng mục khác của kiến trúc.
 
 ## Baseline và thiết kế ban đầu (lịch sử)
 

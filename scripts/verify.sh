@@ -6,6 +6,9 @@ export MAVEN_USER_HOME="${ROOT_DIR}/.cache/maven"
 export MAVEN_OPTS="-Dmaven.repo.local=${ROOT_DIR}/.cache/maven/repository ${MAVEN_OPTS:-}"
 export NPM_CONFIG_CACHE="${ROOT_DIR}/.cache/npm"
 
+echo "==> Verifying CI policy scripts"
+python3 -m unittest discover -s "${ROOT_DIR}/scripts" -p 'test_*.py' -v
+
 for service in api-gateway-server userauthservice postservice commentservice; do
   echo "==> Verifying ${service}"
   (cd "${ROOT_DIR}/${service}" && ./mvnw -B -ntp clean verify)

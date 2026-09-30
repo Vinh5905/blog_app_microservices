@@ -452,6 +452,8 @@ Concurrency CI có thể hủy build cũ cùng PR. Workflow release không đư�
 
 **Triển khai Trivy 2026-09-26:** image gate chạy thêm trên PR để phát hiện sớm lỗi base image. Chỉ push `main` được chuyển đúng năm image đã scan sang job GHCR qua artifact cùng run/attempt; job này phụ thuộc backend, frontend, Sonar, source và image gate. Manifest `ci-release-candidate` chỉ xuất sau push, đối chiếu image ID, ký và verify đủ năm digest. Đây là đầu vào CI cho manifest triển khai mục 5.2, chưa chứa chart/migration/staging approval và không tự cấp quyền deploy. Job hàng ngày quét lại digest của CI release đã hoàn tất gần nhất, không suy diễn đó là release đang chạy trên prod. Chi tiết, giới hạn và chứng cứ ở [TRIVY-PRODUCTION-CI.md](TRIVY-PRODUCTION-CI.md).
 
+**Triển khai Gitleaks 2026-09-30:** gate độc lập quét cả lịch sử Git reachable và snapshot file tracked hiện tại bằng Gitleaks đã pin version/checksum, không chấp nhận suppression cục bộ và chỉ lưu report đã redact. Publish `main` phải xác minh lại evidence Gitleaks đúng source SHA trước khi push image. Ruleset chỉ được coi là nghiệm thu sau khi check `Gitleaks secret gate` chạy thật và chặn một PR chứa credential giả. Chi tiết tại [GITLEAKS-PRODUCTION-CI.md](GITLEAKS-PRODUCTION-CI.md).
+
 # 8 Terraform và bootstrap AWS
 
 ## 8.1 Tạo nền tảng account và state

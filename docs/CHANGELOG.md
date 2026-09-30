@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-09-30 — Patch live Jackson finding from PR CI
+
+- Changed: overrode Spring Boot's Jackson BOM from 2.21.4 to 2.21.7 in all four Java modules after the refreshed Trivy database reported fixable HIGH `CVE-2026-68497`; stayed within the existing Jackson 2.21 LTS patch line.
+- Verified: `bash scripts/verify.sh` passed all policy tests, four independent Maven builds including integration tests and existing JaCoCo gates, and the frontend test/build; every packaged Java artifact contains `jackson-databind-2.21.7.jar`.
+- Pending: clean Trivy source/image gates on PR #6.
+
 ## 2026-09-30 — Add production Gitleaks gate
 
 - Changed: added the checksum-pinned `Gitleaks secret gate` for full reachable Git history and the current tracked tree, fail-closed policy/report validation, redacted 14-day evidence, and source-SHA-bound release verification before GHCR publication. Added policy/release regressions and the production runbook; no suppression or baseline exception was introduced.

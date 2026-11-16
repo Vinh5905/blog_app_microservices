@@ -8,6 +8,7 @@ ADD --checksum=sha256:d77962877d010777cff997015da90ee689f0f4bb76848340e1488f2b83
 ENV FLYWAY_LOCATIONS=filesystem:/flyway/sql \
     FLYWAY_CLEAN_DISABLED=true
 
+USER 10001:10001
 CMD ["migrate"]
 
 FROM flyway-base AS userauthservice

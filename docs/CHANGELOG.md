@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Fix migration PR CI findings
+
+- Changed: run Flyway images with UID and GID 10001, update the frontend lockfile to patched dependency versions, and upgrade API Gateway to Spring Boot 4.0.9 with Spring Cloud 2025.1.4. Gateway route tests now bind to the actual test server port.
+- Verified: five Gateway tests passed on Java 17, two frontend tests and the production build passed on Node 22, and Trivy config reported zero findings for the Flyway Dockerfile. The Flyway user image ran as UID 10001.
+- Pending: confirm PR CI and resolve fixable HIGH vulnerabilities in the Flyway base image before the first publish on main.
+
 ## 2026-11-17 — Publish Flyway migration images from CI
 
 - Changed: added one Dockerfile with Flyway targets for `userauthservice`, `postservice`, and `commentservice`. Backend CI builds and scans the migration images on `main`, signs the GHCR digests with Cosign, and records them in `migration-release.json`.

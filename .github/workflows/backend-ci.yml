@@ -14,6 +14,9 @@ concurrency:
   group: backend-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  MVNW_REPOURL: https://maven-central.storage-download.googleapis.com/maven2
+
 jobs:
   gitleaks:
     name: Gitleaks secret gate
@@ -170,27 +173,16 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: '*/pom.xml'
+          cache-dependency-path: |
+            */pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Resolve Maven dependencies before Trivy scan
         shell: bash
         run: |
-          # Use the same Maven Central mirror as the Trivy scanner.
-          settings="$RUNNER_TEMP/trivy-maven-settings.xml"
-          cat > "$settings" <<'XML'
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
-            <mirrors>
-              <mirror>
-                <id>google-maven-central</id>
-                <mirrorOf>central</mirrorOf>
-                <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
-              </mirror>
-            </mirrors>
-          </settings>
-          XML
           for module in api-gateway-server userauthservice postservice commentservice; do
             echo "Resolving Maven dependencies for $module"
-            (cd "$module" && ./mvnw -B -ntp --settings "$settings" dependency:go-offline -DskipTests)
+            (cd "$module" && ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml dependency:go-offline -DskipTests)
           done
 
       - name: Restore vulnerability database cache
@@ -267,11 +259,13 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: ${{ matrix.module }}/pom.xml
+          cache-dependency-path: |
+            ${{ matrix.module }}/pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Verify module
         working-directory: ${{ matrix.module }}
-        run: ./mvnw -B -ntp clean verify
+        run: ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml clean verify
 
       - name: Require Sonar analysis inputs
         working-directory: ${{ matrix.module }}
@@ -342,7 +336,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: ${{ matrix.module }}/pom.xml
+          cache-dependency-path: |
+            ${{ matrix.module }}/pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Download matching build outputs
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -370,7 +366,7 @@ jobs:
           SONAR_COVERAGE_EXCLUSIONS: ${{ matrix.coverage_exclusions }}
         run: |
           test -n "$SONAR_TOKEN"
-          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
+          ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
             -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
             -Dsonar.organization="$SONAR_ORGANIZATION" \
             -Dsonar.java.jdkHome="$JAVA_HOME" \

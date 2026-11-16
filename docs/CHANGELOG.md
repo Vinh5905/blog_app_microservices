@@ -2,10 +2,16 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
-## 2026-11-17 — Stabilize Maven dependency resolution for Trivy
+## 2026-11-17 — Patch Spring MVC and Vite findings
 
-- Changed: use the configured Google Maven Central mirror for the Trivy dependency warm-up and key its Maven cache on all Java module POMs after repeated HTTP 429 responses from Maven Central.
-- Verified: the mirror returned HTTP 200 for the affected Maven install plugin and the patched Spring WebFlux POM. The preceding PR revision passed the full local verify and Compose smoke test.
+- Changed: upgraded user, post, and comment services to Spring Boot 4.0.9 and Spring Framework 7.0.10, with the Flyway starter, Jackson 2 compatibility, and updated integration-test dependencies. Upgraded Vite to 8.3.8.
+- Verified: built and started all six Compose containers. The same-origin smoke test passed signup, login, post and comment operations, invalid JWT handling, and ownership checks. Frontend tests and production build passed on Node 22.
+- Pending: confirm the updated Java integration tests and Trivy gates on PR #10.
+
+## 2026-11-17 — Stabilize Maven downloads in backend CI
+
+- Changed: use the configured Google Maven Central mirror for Maven Wrapper, module verification, Sonar and Trivy after repeated HTTP 429 responses. Key the Maven caches on the applicable POMs and shared settings.
+- Verified: the mirror returned HTTP 200 for the Maven 3.9.9 distribution, Sonar and Maven install plugins, and the patched Spring WebFlux POM. The preceding PR revision passed the full local verify and Compose smoke test.
 - Pending: confirm Trivy source and image gates on the updated PR.
 
 ## 2026-11-17 — Fix migration PR CI findings

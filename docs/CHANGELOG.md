@@ -2,6 +2,18 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Publish Flyway migration images from CI
+
+- Changed: added one Dockerfile with Flyway targets for `userauthservice`, `postservice`, and `commentservice`. Backend CI builds and scans the migration images on `main`, signs the GHCR digests with Cosign, and records them in `migration-release.json`.
+- Verified: built all three `linux/amd64` image targets locally. `docker run --rm --entrypoint ls "blogapp-migration-${service}:dev" -1 /flyway/sql` showed V1 and V2 for `user`, and V1 for `post` and `comment`.
+- Pending: verify the first migration publish on GitHub Actions and run the resulting images against dev RDS through the GitOps migration Jobs.
+
+## 2026-10-16 — Start local BlogApp on Windows
+
+- Changed: created an ignored `.env` with random local database/JWT values and started the six-container Compose stack at `http://localhost:3000`.
+- Verified: `docker compose config --quiet` and `docker compose up --build -d --wait --wait-timeout 300` passed; all six containers are healthy. `bash scripts/verify.sh` passed in a temporary Java 17/Node 22 Linux container (32 policy tests, 31 Java tests with integration/coverage gates, two frontend tests and production build). `bash scripts/smoke-test.sh` passed through the published frontend port from Linux; frontend HTML, JavaScript and CSS returned HTTP 200.
+- Pending: npm install audit reported three dependency findings (two moderate, one high); dependency remediation is outside this local startup batch.
+
 ## 2026-09-30 — Patch live Jackson finding from PR CI
 
 - Changed: overrode Spring Boot's Jackson BOM from 2.21.4 to 2.21.7 in all four Java modules after the refreshed Trivy database reported fixable HIGH `CVE-2026-68497`; stayed within the existing Jackson 2.21 LTS patch line.

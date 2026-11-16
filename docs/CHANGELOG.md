@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Stabilize Maven dependency resolution for Trivy
+
+- Changed: use the configured Google Maven Central mirror for the Trivy dependency warm-up and key its Maven cache on all Java module POMs after repeated HTTP 429 responses from Maven Central.
+- Verified: the mirror returned HTTP 200 for the affected Maven install plugin and the patched Spring WebFlux POM. The preceding PR revision passed the full local verify and Compose smoke test.
+- Pending: confirm Trivy source and image gates on the updated PR.
+
 ## 2026-11-17 — Fix migration PR CI findings
 
 - Changed: run Flyway images with UID and GID 10001, update the frontend lockfile to patched dependency versions, and upgrade API Gateway to Spring Boot 4.0.9 with Spring Cloud 2025.1.4. Gateway route tests now bind to the actual test server port.

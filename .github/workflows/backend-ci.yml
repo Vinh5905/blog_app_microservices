@@ -170,12 +170,27 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: api-gateway-server/pom.xml
+          cache-dependency-path: '*/pom.xml'
 
       - name: Resolve Maven dependencies before Trivy scan
+        shell: bash
         run: |
+          # Use the same Maven Central mirror as the Trivy scanner.
+          settings="$RUNNER_TEMP/trivy-maven-settings.xml"
+          cat > "$settings" <<'XML'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+            <mirrors>
+              <mirror>
+                <id>google-maven-central</id>
+                <mirrorOf>central</mirrorOf>
+                <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+              </mirror>
+            </mirrors>
+          </settings>
+          XML
           for module in api-gateway-server userauthservice postservice commentservice; do
-            (cd "$module" && ./mvnw -B -ntp dependency:go-offline -DskipTests)
+            echo "Resolving Maven dependencies for $module"
+            (cd "$module" && ./mvnw -B -ntp --settings "$settings" dependency:go-offline -DskipTests)
           done
 
       - name: Restore vulnerability database cache

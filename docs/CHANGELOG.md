@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Fix frontend build after Alpine package rotation
+
+- Changed: refreshed the unprivileged Nginx base digest and set the minimum patched libexpat version to 2.10.0-r0. Alpine can serve a newer security revision when it removes superseded packages.
+- Verified: PR CI identified the removed 2.8.5-r0 package as the build failure. Verified the new base digest and the Alpine 3.24 linux/amd64 package version. The preceding revision passed the full local verify and the GitHub backend, frontend, Sonar, and Trivy source gates.
+- Pending: confirm the image gate on the updated PR.
+
 ## 2026-11-17 — Patch Spring MVC and Vite findings
 
 - Changed: upgraded user, post, and comment services to Spring Boot 4.0.9 and Spring Framework 7.0.10, with the Flyway starter, Jackson 2 compatibility, and updated integration-test dependencies. Upgraded Vite to 8.3.8.

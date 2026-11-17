@@ -7,10 +7,10 @@ COPY src src
 COPY index.html vite.config.mjs ./
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:4714e0b1b2577eaa1a6131d07c958b67f0eb68e6d0521e90c6e5287db8cf0bc5
-# CVE-2026-93990: the pinned base predates Alpine's libexpat fix.
+FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+# Install a supported security patch from the Alpine repository.
 USER root
-RUN apk add --no-cache 'libexpat=2.8.5-r0'
+RUN apk add --no-cache 'libexpat>=2.10.0-r0'
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/build /usr/share/nginx/html
 USER 101

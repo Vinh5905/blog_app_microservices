@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Patch Flyway migration images
+
+- Changed: assembled Flyway OSS CLI 11.14.1, MySQL support and checksum-pinned Connector/J 8.4.0 on the patched Temurin 17 runtime. The three targets share the patched base, run as UID/GID 10001 and default to migrate with clean disabled.
+- Verified: all three linux/amd64 images built and migrated empty MySQL 8.4.0 databases over TLS under a read-only root filesystem. The databases had 2/1/1 successful history entries. Validate, repeat migrate and rejection of clean passed for every target. Trivy reported zero HIGH/CRITICAL Dockerfile configuration findings. The Flyway 11.14.1 compatibility warning for MySQL 8.4 was present in the local runs.
+- Pending: confirm vulnerability scans against the publication policy and the first main-branch GHCR release.
+
 ## 2026-11-17 — Patch runtime OS image findings
 
 - Changed: refreshed the pinned Java 17 Jammy runtime base. Applied current APT fixes for apt, Brotli, and OpenSSL in the four Java images and upgraded the packages reported by Trivy in the Alpine frontend image.

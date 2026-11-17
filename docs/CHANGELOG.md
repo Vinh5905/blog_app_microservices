@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-18 — Use Maven Central mirror inside Java Docker builds
+
+- Changed: set the Maven Wrapper distribution mirror in each Java build stage and explicitly use module-local Maven settings for dependency warm-up and packaging. Each settings file matches the existing CI Maven Central mirror and is copied by the existing module build context.
+- Verified: all four Docker builds downloaded Maven and reached dependency resolution through the mirror. The four settings files parse as XML and match the CI settings.
+- Pending: complete local builds, verify and smoke tests, and confirm the PR image gate.
+
 ## 2026-11-17 — Patch Flyway migration images
 
 - Changed: assembled Flyway OSS CLI 11.14.1, MySQL support and checksum-pinned Connector/J 8.4.0 on the patched Temurin 17 runtime. The three targets share the patched base, run as UID/GID 10001 and default to migrate with clean disabled.

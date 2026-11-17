@@ -2,6 +2,12 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Patch runtime OS image findings
+
+- Changed: refreshed the pinned Java 17 Jammy runtime base. Applied current APT fixes for apt, Brotli, and OpenSSL in the four Java images and upgraded the packages reported by Trivy in the Alpine frontend image.
+- Verified: the preceding workflow built all five images and identified fixable OS package findings in each. Backend, frontend, Sonar, and Trivy source checks passed on that revision.
+- Pending: confirm the rebuilt images, local smoke test, and updated Trivy image gate.
+
 ## 2026-11-17 — Fix frontend build after Alpine package rotation
 
 - Changed: refreshed the unprivileged Nginx base digest and set the minimum patched libexpat version to 2.10.0-r0. Alpine can serve a newer security revision when it removes superseded packages.

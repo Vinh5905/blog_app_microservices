@@ -8,9 +8,11 @@ COPY index.html vite.config.mjs ./
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
-# Install a supported security patch from the Alpine repository.
+# Apply security patches from the pinned base image's Alpine release.
 USER root
-RUN apk add --no-cache 'libexpat>=2.10.0-r0'
+RUN apk add --no-cache --upgrade \
+        brotli-libs curl libcurl libxslt musl musl-utils zlib \
+        'libexpat>=2.10.0-r0'
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/build /usr/share/nginx/html
 USER 101

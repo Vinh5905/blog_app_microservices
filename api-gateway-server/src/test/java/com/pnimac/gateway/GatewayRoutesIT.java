@@ -9,8 +9,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -30,7 +30,10 @@ class GatewayRoutesIT {
         COMMENT.start();
     }
 
-    @Autowired WebTestClient client;
+    @LocalServerPort
+    private int port;
+
+    private WebTestClient client;
 
     @DynamicPropertySource
     static void routes(DynamicPropertyRegistry registry) {
@@ -42,6 +45,7 @@ class GatewayRoutesIT {
 
     @BeforeEach
     void reset() {
+        client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
         AUTH.resetAll();
         POST.resetAll();
         COMMENT.resetAll();

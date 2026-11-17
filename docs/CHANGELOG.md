@@ -2,6 +2,54 @@
 
 This is the concise handoff log for implementation work. The architecture source of truth remains `Kien-truc-DevOps-BlogApp copy.md`.
 
+## 2026-11-17 — Patch Flyway migration images
+
+- Changed: assembled Flyway OSS CLI 11.14.1, MySQL support and checksum-pinned Connector/J 8.4.0 on the patched Temurin 17 runtime. The three targets share the patched base, run as UID/GID 10001 and default to migrate with clean disabled.
+- Verified: all three linux/amd64 images built and migrated empty MySQL 8.4.0 databases over TLS under a read-only root filesystem. The databases had 2/1/1 successful history entries. Validate, repeat migrate and rejection of clean passed for every target. Trivy reported zero HIGH/CRITICAL Dockerfile configuration findings. The Flyway 11.14.1 compatibility warning for MySQL 8.4 was present in the local runs.
+- Pending: confirm vulnerability scans against the publication policy and the first main-branch GHCR release.
+
+## 2026-11-17 — Patch runtime OS image findings
+
+- Changed: refreshed the pinned Java 17 Jammy runtime base. Applied current APT fixes for apt, Brotli, and OpenSSL in the four Java images and upgraded the packages reported by Trivy in the Alpine frontend image.
+- Verified: the preceding workflow built all five images and identified fixable OS package findings in each. Backend, frontend, Sonar, and Trivy source checks passed on that revision.
+- Pending: confirm the rebuilt images, local smoke test, and updated Trivy image gate.
+
+## 2026-11-17 — Fix frontend build after Alpine package rotation
+
+- Changed: refreshed the unprivileged Nginx base digest and set the minimum patched libexpat version to 2.10.0-r0. Alpine can serve a newer security revision when it removes superseded packages.
+- Verified: PR CI identified the removed 2.8.5-r0 package as the build failure. Verified the new base digest and the Alpine 3.24 linux/amd64 package version. The preceding revision passed the full local verify and the GitHub backend, frontend, Sonar, and Trivy source gates.
+- Pending: confirm the image gate on the updated PR.
+
+## 2026-11-17 — Patch Spring MVC and Vite findings
+
+- Changed: upgraded user, post, and comment services to Spring Boot 4.0.9 and Spring Framework 7.0.10, with the Flyway starter, Jackson 2 compatibility, and updated integration-test dependencies. Upgraded Vite to 8.3.8.
+- Verified: built and started all six Compose containers. The same-origin smoke test passed signup, login, post and comment operations, invalid JWT handling, and ownership checks. Frontend tests and production build passed on Node 22.
+- Pending: confirm the updated Java integration tests and Trivy gates on PR #10.
+
+## 2026-11-17 — Stabilize Maven downloads in backend CI
+
+- Changed: use the configured Google Maven Central mirror for Maven Wrapper, module verification, Sonar and Trivy after repeated HTTP 429 responses. Key the Maven caches on the applicable POMs and shared settings.
+- Verified: the mirror returned HTTP 200 for the Maven 3.9.9 distribution, Sonar and Maven install plugins, and the patched Spring WebFlux POM. The preceding PR revision passed the full local verify and Compose smoke test.
+- Pending: confirm Trivy source and image gates on the updated PR.
+
+## 2026-11-17 — Fix migration PR CI findings
+
+- Changed: run Flyway images with UID and GID 10001, update the frontend lockfile to patched dependency versions, and upgrade API Gateway to Spring Boot 4.0.9 with Spring Cloud 2025.1.4. Gateway route tests now bind to the actual test server port.
+- Verified: five Gateway tests passed on Java 17, two frontend tests and the production build passed on Node 22, and Trivy config reported zero findings for the Flyway Dockerfile. The Flyway user image ran as UID 10001.
+- Pending: confirm PR CI and resolve fixable HIGH vulnerabilities in the Flyway base image before the first publish on main.
+
+## 2026-11-17 — Publish Flyway migration images from CI
+
+- Changed: added one Dockerfile with Flyway targets for `userauthservice`, `postservice`, and `commentservice`. Backend CI builds and scans the migration images on `main`, signs the GHCR digests with Cosign, and records them in `migration-release.json`.
+- Verified: built all three `linux/amd64` image targets locally. `docker run --rm --entrypoint ls "blogapp-migration-${service}:dev" -1 /flyway/sql` showed V1 and V2 for `user`, and V1 for `post` and `comment`.
+- Pending: verify the first migration publish on GitHub Actions and run the resulting images against dev RDS through the GitOps migration Jobs.
+
+## 2026-10-16 — Start local BlogApp on Windows
+
+- Changed: created an ignored `.env` with random local database/JWT values and started the six-container Compose stack at `http://localhost:3000`.
+- Verified: `docker compose config --quiet` and `docker compose up --build -d --wait --wait-timeout 300` passed; all six containers are healthy. `bash scripts/verify.sh` passed in a temporary Java 17/Node 22 Linux container (32 policy tests, 31 Java tests with integration/coverage gates, two frontend tests and production build). `bash scripts/smoke-test.sh` passed through the published frontend port from Linux; frontend HTML, JavaScript and CSS returned HTTP 200.
+- Pending: npm install audit reported three dependency findings (two moderate, one high); dependency remediation is outside this local startup batch.
+
 ## 2026-09-30 — Patch live Jackson finding from PR CI
 
 - Changed: overrode Spring Boot's Jackson BOM from 2.21.4 to 2.21.7 in all four Java modules after the refreshed Trivy database reported fixable HIGH `CVE-2026-68497`; stayed within the existing Jackson 2.21 LTS patch line.

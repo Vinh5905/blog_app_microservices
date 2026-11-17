@@ -9,14 +9,14 @@ import java.sql.SQLException;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
 
 @Testcontainers
 class AuthMigrationIT {
     @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.0");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.0");
 
     /**
      * Verifies a real MySQL 8.4 upgrade from V1 to the latest schema: pre-existing user

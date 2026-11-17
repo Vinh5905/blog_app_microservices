@@ -14,6 +14,9 @@ concurrency:
   group: backend-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  MVNW_REPOURL: https://maven-central.storage-download.googleapis.com/maven2
+
 jobs:
   gitleaks:
     name: Gitleaks secret gate
@@ -170,12 +173,16 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: api-gateway-server/pom.xml
+          cache-dependency-path: |
+            */pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Resolve Maven dependencies before Trivy scan
+        shell: bash
         run: |
           for module in api-gateway-server userauthservice postservice commentservice; do
-            (cd "$module" && ./mvnw -B -ntp dependency:go-offline -DskipTests)
+            echo "Resolving Maven dependencies for $module"
+            (cd "$module" && ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml dependency:go-offline -DskipTests)
           done
 
       - name: Restore vulnerability database cache
@@ -252,11 +259,13 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: ${{ matrix.module }}/pom.xml
+          cache-dependency-path: |
+            ${{ matrix.module }}/pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Verify module
         working-directory: ${{ matrix.module }}
-        run: ./mvnw -B -ntp clean verify
+        run: ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml clean verify
 
       - name: Require Sonar analysis inputs
         working-directory: ${{ matrix.module }}
@@ -327,7 +336,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-          cache-dependency-path: ${{ matrix.module }}/pom.xml
+          cache-dependency-path: |
+            ${{ matrix.module }}/pom.xml
+            .github/maven-ci-settings.xml
 
       - name: Download matching build outputs
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -355,7 +366,7 @@ jobs:
           SONAR_COVERAGE_EXCLUSIONS: ${{ matrix.coverage_exclusions }}
         run: |
           test -n "$SONAR_TOKEN"
-          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
+          ./mvnw -B -ntp --settings ../.github/maven-ci-settings.xml org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
             -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
             -Dsonar.organization="$SONAR_ORGANIZATION" \
             -Dsonar.java.jdkHome="$JAVA_HOME" \
@@ -486,12 +497,15 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.3
+
       - name: Load the exact scanned images
         run: docker image load --input "$RUNNER_TEMP/candidates/release-images.tar"
+
       - name: Authenticate to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
       - name: Recheck gates, push digests, sign and verify all five images
         run: >-
           python3 scripts/publish_images.py
@@ -509,3 +523,97 @@ jobs:
       - name: Sign out of GHCR
         if: always()
         run: docker logout ghcr.io
+
+  publish-migrations:
+    name: Publish Flyway migration images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish-images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+        with:
+          version: v0.74.0
+          cache: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.1.3
+
+      - name: Build and scan all three images
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/migration-evidence"
+          mkdir -p "$evidence"
+          for module in userauthservice postservice commentservice; do
+            image="blogapp-ci/migration-$module:$GITHUB_SHA"
+            docker build --platform linux/amd64 \
+              --file migrations/Dockerfile --target "$module" \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --tag "$image" .
+            trivy image --config security/trivy/trivy.yaml --ignorefile /dev/null \
+              --image-src docker --scanners vuln --severity HIGH,CRITICAL \
+              --ignore-unfixed --exit-code 1 --timeout 20m --format json \
+              --output "$evidence/$module.trivy.json" "$image"
+          done
+
+      - name: Publish, sign and record verified digests
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+
+          evidence="$RUNNER_TEMP/migration-evidence"
+          entries="$RUNNER_TEMP/migration-images.ndjson"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/backend-ci.yml@refs/heads/main"
+          : > "$entries"
+
+          for module in userauthservice postservice commentservice; do
+            image="blogapp-ci/migration-$module:$GITHUB_SHA"
+            repository="ghcr.io/${GITHUB_REPOSITORY,,}/migration-$module"
+            tag="$repository:$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            docker tag "$image" "$tag"
+            docker push "$tag"
+            digest=$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            ref="$repository@$digest"
+
+            docker pull --platform linux/amd64 "$ref"
+            test "$(docker image inspect --format '{{.Id}}' "$ref")" = \
+                 "$(docker image inspect --format '{{.Id}}' "$image")"
+
+            cosign sign --yes "$ref"
+            cosign verify --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-github-workflow-sha "$GITHUB_SHA" \
+              "$ref" > "$evidence/$module.signature.json"
+
+            jq -nc --arg module "$module" --arg image "$ref" \
+              '{key: $module, value: {image: $image, platform: "linux/amd64"}}' >> "$entries"
+          done
+
+          jq -s --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" \
+            '{kind: "ci-migration-candidate", schema_version: 1, source_sha: $sha, repository: $repo, images: from_entries}' \
+            "$entries" > "$evidence/migration-release.json"
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: migration-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/migration-evidence/
+          retention-days: 90
